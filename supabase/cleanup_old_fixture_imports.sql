@@ -1,0 +1,7 @@
+-- Deprecated safety note.
+-- Do not run the old cleanup that deleted every non-legacy fixture.
+-- API-synced fixtures are now the intended source of truth, so provider-backed rows
+-- such as api_provider = 'football-data' must be preserved.
+--
+-- If legacy spreadsheet fixtures need to be removed later, migrate or archive any
+-- predictions attached to those legacy fixture IDs first.
