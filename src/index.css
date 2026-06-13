@@ -1896,6 +1896,17 @@ select:disabled {
   font-weight: 950;
 }
 
+.history-breakdown-joker {
+  margin-top: 3px;
+  padding-top: 7px;
+  border-top: 1px dashed rgba(200, 164, 93, 0.55);
+}
+
+.history-breakdown-joker span,
+.history-breakdown-joker strong {
+  color: #7A5B16;
+}
+
 .history-total {
   margin-top: 4px;
   padding: 9px 10px;

@@ -50,6 +50,8 @@ function History({ data, session }) {
           const predictedScore = formatPredictedScore(prediction)
           const knockout = isKnockoutFixture(fixture)
           const resultStatus = getResultStatus(fixture, prediction, score)
+          const basePoints = score ? score.main + score.scoreline + score.penalty : null
+          const jokerBonus = score && prediction.joker_used ? score.total - basePoints : null
 
           return (
             <article className="history-row" key={fixture.id}>
@@ -100,12 +102,8 @@ function History({ data, session }) {
                   <p className="section-label">Points Breakdown</p>
                   <BreakdownItem label="Result Prediction" value={score ? score.main : null} />
                   <BreakdownItem label="Score Prediction" value={score ? score.scoreline : null} />
-                  {knockout && <BreakdownItem label="Penalty Call" value={score ? score.penalty : null} />}
-                  <BreakdownItem
-                    label="Joker Multiplier"
-                    value={`x${prediction.joker_used ? 2 : 1}`}
-                    plain
-                  />
+                  {knockout && <BreakdownItem label="Penalty Prediction" value={score ? score.penalty : null} />}
+                  {prediction.joker_used && <BreakdownItem label="Joker Bonus" value={jokerBonus} joker />}
                   <div className="history-total">
                     <span>Total Points Earned</span>
                     <strong>{score ? score.total : 'Pending'}</strong>
@@ -184,16 +182,14 @@ function getResultStatus(fixture, prediction, score) {
     : { label: 'Wrong Result', tone: 'danger' }
 }
 
-function BreakdownItem({ label, plain = false, value }) {
+function BreakdownItem({ joker = false, label, value }) {
   return (
-    <div className="history-breakdown-line">
+    <div className={joker ? 'history-breakdown-line history-breakdown-joker' : 'history-breakdown-line'}>
       <span>{label}</span>
       <strong>
         {value == null
           ? 'Pending'
-          : plain
-            ? value
-            : `${value >= 0 ? '+' : ''}${value}`}
+          : `${value >= 0 ? '+' : ''}${value}`}
       </strong>
     </div>
   )

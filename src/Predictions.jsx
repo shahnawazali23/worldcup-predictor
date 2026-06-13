@@ -461,14 +461,14 @@ function PotentialPointsPanel({ fixture, potential, prediction }) {
   return (
     <details className="potential-panel">
       <summary>
-        <span>Reward Breakdown</span>
+        <span>Potential Points</span>
         <strong>{formatPoints(potential.total)}</strong>
       </summary>
       <div className="potential-breakdown">
         <BreakdownLine label="Result Prediction" value={`+${potential.main}`} active={potential.hasMainPick} />
         <BreakdownLine label="Score Prediction" value={`+${potential.scoreline}`} active={potential.hasScoreline} />
         {knockout && (
-          <BreakdownLine label="Penalty Call" value={hasPenaltyCall ? '+5' : '+0'} active={hasPenaltyCall} />
+          <BreakdownLine label="Penalty Prediction" value={hasPenaltyCall ? '+5' : '+0'} active={hasPenaltyCall} />
         )}
         <BreakdownLine label="Joker Multiplier" value={`x${potential.multiplier}`} active={potential.multiplier > 1} joker />
       </div>
