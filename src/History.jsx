@@ -49,6 +49,7 @@ function History({ data, session }) {
             : data.teamsById[prediction.picked_team_id]
           const predictedScore = formatPredictedScore(prediction)
           const knockout = isKnockoutFixture(fixture)
+          const resultStatus = getResultStatus(fixture, prediction, score)
 
           return (
             <article className="history-row" key={fixture.id}>
@@ -59,6 +60,9 @@ function History({ data, session }) {
                   <b>vs</b>
                   <TeamNameWithFlag team={team2} alignRight />
                 </div>
+                <span className={`result-status result-status-${resultStatus.tone}`}>
+                  {resultStatus.label}
+                </span>
                 <time>
                   {fixtureKickoffDate(fixture).toLocaleString(undefined, {
                     day: 'numeric',
@@ -74,9 +78,14 @@ function History({ data, session }) {
                   <div>
                     <small>Your Prediction</small>
                     {prediction.pick_is_draw ? (
-                      <strong>Draw</strong>
-                    ) : (
+                      <span className="history-team-name">
+                        <span className="flag-mark">DRAW</span>
+                        <strong>Draw</strong>
+                      </span>
+                    ) : pickedTeamRecord ? (
                       <TeamNameWithFlag team={pickedTeamRecord} />
+                    ) : (
+                      <strong>No pick</strong>
                     )}
                     <span>{predictedScore}</span>
                   </div>
@@ -160,6 +169,20 @@ function TeamFlag({ team }) {
 }
 
 export default memo(History)
+
+function getResultStatus(fixture, prediction, score) {
+  if (!prediction?.pick_is_draw && !prediction?.picked_team_id) {
+    return { label: 'No Pick', tone: 'neutral' }
+  }
+
+  if (!fixture.is_finished || !score) {
+    return { label: 'Pending Result', tone: 'pending' }
+  }
+
+  return score.correctPick
+    ? { label: 'Correct Result', tone: 'success' }
+    : { label: 'Wrong Result', tone: 'danger' }
+}
 
 function BreakdownItem({ label, plain = false, value }) {
   return (

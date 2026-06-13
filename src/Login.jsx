@@ -15,10 +15,9 @@ export default function Login() {
       <section className="login-hero">
         <div className="login-copy">
           <p className="eyebrow">World Cup 2026</p>
-          <h1>Prediction League</h1>
+          <h1>Call the upsets. Beat your friends.</h1>
           <p>
-            Pick every match, chase upsets, protect your scoreline bets, and spend three jokers
-            wisely.
+            Predict every World Cup match, chase scoreline bonuses, and use your jokers wisely.
           </p>
           <button className="primary-action" onClick={handleLogin} type="button">
             <GoogleIcon />
@@ -26,13 +25,13 @@ export default function Login() {
           </button>
         </div>
         <div className="login-explainer">
-          <h2>Play the tournament</h2>
-          <ul>
-            <li>Call the upsets</li>
-            <li>Predict scorelines</li>
-            <li>Use 3 jokers wisely</li>
-            <li>Beat your friends</li>
-          </ul>
+          <h2>How it works</h2>
+          <ol>
+            <li><span>1</span>Pick the match result</li>
+            <li><span>2</span>Predict the exact scoreline</li>
+            <li><span>3</span>Play 3 jokers wisely</li>
+            <li><span>4</span>Call upsets to climb the table</li>
+          </ol>
         </div>
       </section>
     </main>
