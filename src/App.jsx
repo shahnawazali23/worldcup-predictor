@@ -189,7 +189,7 @@ export default function App() {
               <History data={leagueData} session={session} />
             </div>
             <div hidden={page !== 'leaderboard'}>
-              <Leaderboard data={leagueData} />
+              <Leaderboard data={leagueData} session={session} />
             </div>
             <div hidden={page !== 'rules'}>
               <Rules />
