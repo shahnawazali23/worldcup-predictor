@@ -261,6 +261,15 @@ select:disabled {
   object-fit: cover;
 }
 
+.avatar-initial {
+  display: grid;
+  place-items: center;
+  color: var(--navy);
+  background: #F2EBDD;
+  font-size: 0.9rem;
+  font-weight: 950;
+}
+
 .main-grid,
 .screen-stack,
 .rules-layout {
@@ -902,61 +911,37 @@ select:disabled {
   gap: 10px;
 }
 
-.leader-highlights {
+.leader-summary-cards {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 10px;
 }
 
-.leader-highlight-card {
+.leader-summary-card {
   min-width: 0;
-  padding: 14px;
+  padding: 12px 14px;
   border: 1px solid rgba(200, 164, 93, 0.32);
   border-radius: 8px;
   background: #FFFDF7;
   box-shadow: 0 12px 28px rgba(16, 42, 67, 0.06);
 }
 
-.leader-highlight-card span,
-.leader-highlight-card small {
+.leader-summary-card span,
+.leader-summary-card small {
   display: block;
   color: #475569;
   font-size: 0.78rem;
   font-weight: 800;
 }
 
-.leader-highlight-card strong {
+.leader-summary-card strong {
   display: block;
   overflow: hidden;
-  margin: 4px 0;
+  margin: 3px 0;
   color: var(--navy);
-  font-size: 1rem;
+  font-size: 1.05rem;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.leader-sort {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.leader-sort button {
-  padding: 8px 11px;
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  color: #334155;
-  background: #FFFFFF;
-  font-size: 0.82rem;
-  font-weight: 850;
-  transition: border-color 160ms ease, background 160ms ease, color 160ms ease;
-}
-
-.leader-sort button:hover,
-.leader-sort button.active {
-  border-color: rgba(16, 42, 67, 0.32);
-  color: var(--navy);
-  background: #F5F0E4;
 }
 
 .history-list {
@@ -1014,11 +999,11 @@ select:disabled {
 
 .leader-row {
   display: grid;
-  grid-template-columns: 54px 38px minmax(180px, 1fr) minmax(420px, 1.35fr) 86px;
-  grid-template-areas: "rank avatar main metrics points";
-  gap: 14px;
+  grid-template-columns: 54px 38px minmax(0, 1fr) 92px;
+  grid-template-areas: "rank avatar main points";
+  gap: 12px;
   align-items: center;
-  padding: 16px;
+  padding: 12px 14px;
 }
 
 .leader-row.leader {
@@ -1062,52 +1047,25 @@ select:disabled {
   font-size: 0.88rem;
 }
 
-.leader-meta {
+.points {
+  grid-area: points;
   display: grid;
-  gap: 2px;
-}
-
-.leader-metrics {
-  grid-area: metrics;
-  display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 8px;
-}
-
-.leader-metric {
-  min-width: 0;
-  padding: 8px 9px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: #F8F6F0;
-}
-
-.leader-metric small,
-.leader-metric strong {
-  display: block;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.leader-metric small {
-  color: #475569;
-  font-size: 0.7rem;
-  font-weight: 800;
-}
-
-.leader-metric strong {
-  margin-top: 2px;
+  justify-items: end;
+  text-align: right;
   color: var(--navy);
-  font-size: 0.96rem;
+}
+
+.points strong {
+  line-height: 1;
+  font-size: 2rem;
   font-weight: 950;
 }
 
-.points {
-  grid-area: points;
-  text-align: right;
-  color: #0c725e;
-  font-size: 2rem;
+.points span {
+  color: #475569;
+  font-size: 0.78rem;
+  font-weight: 900;
+  text-transform: uppercase;
 }
 
 .rules-layout {
@@ -2336,23 +2294,13 @@ select:disabled {
     justify-content: flex-start;
   }
 
-  .leader-highlights {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+  .leader-summary-cards {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
   .leader-row {
     grid-template-columns: 42px 38px minmax(0, 1fr) 70px;
-    grid-template-areas:
-      "rank avatar main points"
-      "metrics metrics metrics metrics";
-  }
-
-  .leader-meta {
-    display: none;
-  }
-
-  .leader-metrics {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-areas: "rank avatar main points";
   }
 
   .result-form {
@@ -2370,6 +2318,10 @@ select:disabled {
   .screen-stack,
   .rules-layout {
     width: min(100% - 20px, 1180px);
+  }
+
+  .leader-summary-cards {
+    grid-template-columns: 1fr;
   }
 
   .main-pick-row {
