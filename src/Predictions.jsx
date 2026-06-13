@@ -32,7 +32,14 @@ export default function Predictions({ active = true, data, onPredictionSaved, se
   const [error, setError] = useState('')
   const [optimisticPredictions, setOptimisticPredictions] = useState({})
   const [jokerOverrides, setJokerOverrides] = useState({})
+  const [savedFixtureId, setSavedFixtureId] = useState(null)
   const now = useNow(active)
+
+  useEffect(() => {
+    if (!savedFixtureId) return undefined
+    const timer = setTimeout(() => setSavedFixtureId(null), 1800)
+    return () => clearTimeout(timer)
+  }, [savedFixtureId])
 
   const userPredictions = useMemo(() => {
     const savedPredictions = data.predictions.filter(
@@ -115,6 +122,7 @@ export default function Predictions({ active = true, data, onPredictionSaved, se
     try {
       const savedPrediction = await savePrediction({ fixture, prediction: existing, session, updates })
       onPredictionSaved(savedPrediction)
+      setSavedFixtureId(fixture.id)
       setOptimisticPredictions((current) => {
         const next = { ...current }
         delete next[fixture.id]
@@ -403,6 +411,7 @@ export default function Predictions({ active = true, data, onPredictionSaved, se
                         ? `Picked: ${team2?.name || 'TBD'}`
                         : 'No pick yet'}
                 </strong>
+                {savedFixtureId === fixture.id && <em className="saved-badge">Saved</em>}
               </div>
             </article>
           )

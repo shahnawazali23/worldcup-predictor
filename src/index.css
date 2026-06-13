@@ -2104,6 +2104,47 @@ select:disabled {
   color: var(--navy);
 }
 
+/* Focused prediction polish */
+.team-pick-flag .flag-mark {
+  min-width: 56px;
+  min-height: 42px;
+  font-size: 2.75rem;
+}
+
+.history-team-name .flag-mark {
+  min-width: 34px;
+  min-height: 26px;
+  font-size: 1.45rem;
+}
+
+.history-fixture-teams .history-team-name {
+  font-size: 1.02rem;
+}
+
+.history-summary-grid strong,
+.history-team-name strong {
+  font-size: 1rem;
+}
+
+.fixture-foot {
+  align-items: center;
+}
+
+.saved-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 22px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  color: #102A43;
+  background: #EBD7A7;
+  font-size: 0.68rem;
+  font-style: normal;
+  font-weight: 950;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
 @media (max-width: 900px) {
   .login-hero,
   .topbar,
