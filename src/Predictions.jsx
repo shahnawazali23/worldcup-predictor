@@ -396,12 +396,12 @@ export default function Predictions({ active = true, data, onPredictionSaved, se
                 </span>
                 <strong>
                   {pickedDraw
-                    ? 'Picked draw'
+                    ? 'Picked: Draw'
                     : pickedTeam1
-                      ? `Picked ${team1?.short_name || team1?.name}`
+                      ? `Picked: ${team1?.name || 'TBD'}`
                       : pickedTeam2
-                        ? `Picked ${team2?.short_name || team2?.name}`
-                        : 'No main pick'}
+                        ? `Picked: ${team2?.name || 'TBD'}`
+                        : 'No pick yet'}
                 </strong>
               </div>
             </article>

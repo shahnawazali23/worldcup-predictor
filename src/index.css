@@ -91,12 +91,55 @@ select:disabled {
   font-weight: 800;
 }
 
-.login-scoreboard {
+.login-scoreboard,
+.login-explainer {
   border: 1px solid rgba(255, 255, 255, 0.22);
   border-radius: 8px;
   padding: 24px;
   background: rgba(255, 255, 255, 0.12);
   backdrop-filter: blur(18px);
+}
+
+.login-explainer h2 {
+  margin: 0 0 18px;
+  font-size: 1.35rem;
+}
+
+.login-explainer ul {
+  display: grid;
+  gap: 14px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.login-explainer li {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  color: #eef6ff;
+  font-weight: 850;
+}
+
+.login-explainer li::before {
+  content: "";
+  width: 8px;
+  height: 8px;
+  flex: 0 0 8px;
+  border-radius: 50%;
+  background: #C8A45D;
+}
+
+.primary-action {
+  display: inline-flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.google-icon {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 18px;
 }
 
 .login-scoreboard div {
@@ -1588,6 +1631,67 @@ select:disabled {
   display: block;
   margin: 3px 0;
   color: var(--text);
+}
+
+.history-fixture-teams,
+.history-result-line,
+.history-team-name {
+  min-width: 0;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.history-fixture-teams {
+  margin: 4px 0;
+  justify-content: space-between;
+}
+
+.history-fixture-teams b {
+  flex: 0 0 auto;
+  color: #475569;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+}
+
+.history-team-name {
+  color: var(--text);
+  font-weight: 900;
+}
+
+.history-team-name strong {
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  color: inherit;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.history-team-name-right {
+  justify-content: flex-end;
+  text-align: right;
+}
+
+.history-team-name-compact {
+  flex: 1 1 0;
+}
+
+.history-team-name .flag-mark {
+  min-width: 30px;
+  min-height: 22px;
+  font-size: 1.25rem;
+}
+
+.history-result-line {
+  justify-content: space-between;
+}
+
+.history-result-line > strong {
+  flex: 0 0 auto;
+  margin: 0 6px;
+  color: var(--navy);
+  font-size: 1.15rem;
 }
 
 .history-breakdown {

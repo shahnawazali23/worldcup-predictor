@@ -21,21 +21,31 @@ export default function Login() {
             wisely.
           </p>
           <button className="primary-action" onClick={handleLogin} type="button">
+            <GoogleIcon />
             Sign in with Google
           </button>
         </div>
-        <div className="login-scoreboard" aria-hidden="true">
-          <div>
-            <span>MEX</span>
-            <strong>2</strong>
-          </div>
-          <div>
-            <span>RSA</span>
-            <strong>0</strong>
-          </div>
-          <small>Upset tiers · Exact scores · Jokers</small>
+        <div className="login-explainer">
+          <h2>Play the tournament</h2>
+          <ul>
+            <li>Call the upsets</li>
+            <li>Predict scorelines</li>
+            <li>Use 3 jokers wisely</li>
+            <li>Beat your friends</li>
+          </ul>
         </div>
       </section>
     </main>
+  )
+}
+
+function GoogleIcon() {
+  return (
+    <svg aria-hidden="true" className="google-icon" viewBox="0 0 24 24">
+      <path fill="#4285F4" d="M21.6 12.2c0-.7-.1-1.3-.2-1.9H12v3.6h5.4c-.2 1.2-.9 2.3-2 3v2.5h3.2c1.9-1.8 3-4.4 3-7.2z" />
+      <path fill="#34A853" d="M12 22c2.7 0 5-0.9 6.6-2.5l-3.2-2.5c-.9.6-2 .9-3.4.9-2.6 0-4.8-1.8-5.6-4.1H3.1v2.6C4.7 19.7 8.1 22 12 22z" />
+      <path fill="#FBBC05" d="M6.4 13.8c-.2-.6-.3-1.2-.3-1.8s.1-1.2.3-1.8V7.6H3.1C2.4 8.9 2 10.4 2 12s.4 3.1 1.1 4.4l3.3-2.6z" />
+      <path fill="#EA4335" d="M12 6.1c1.5 0 2.8.5 3.8 1.5l2.9-2.9C17 3 14.7 2 12 2 8.1 2 4.7 4.3 3.1 7.6l3.3 2.6c.8-2.3 3-4.1 5.6-4.1z" />
+    </svg>
   )
 }

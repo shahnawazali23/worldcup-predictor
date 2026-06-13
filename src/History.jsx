@@ -44,20 +44,21 @@ function History({ data, session }) {
         {rows.map(({ fixture, prediction, score }) => {
           const team1 = data.teamsById[fixture.team1_id]
           const team2 = data.teamsById[fixture.team2_id]
-          const pickedTeam = prediction.pick_is_draw
-            ? 'Draw'
-            : data.teamsById[prediction.picked_team_id]?.name || 'No main pick'
+          const pickedTeamRecord = prediction.pick_is_draw
+            ? null
+            : data.teamsById[prediction.picked_team_id]
           const predictedScore = formatPredictedScore(prediction)
-          const actualResult = formatActualResult(fixture, team1, team2)
           const knockout = isKnockoutFixture(fixture)
 
           return (
             <article className="history-row" key={fixture.id}>
               <div className="history-match">
                 <span>{fixture.stage}</span>
-                <strong>
-                  {team1?.name || 'TBD'} vs {team2?.name || 'TBD'}
-                </strong>
+                <div className="history-fixture-teams">
+                  <TeamNameWithFlag team={team1} />
+                  <b>vs</b>
+                  <TeamNameWithFlag team={team2} alignRight />
+                </div>
                 <time>
                   {fixtureKickoffDate(fixture).toLocaleString(undefined, {
                     day: 'numeric',
@@ -72,12 +73,16 @@ function History({ data, session }) {
                 <div className="history-summary-grid">
                   <div>
                     <small>Your Prediction</small>
-                    <strong>{pickedTeam}</strong>
+                    {prediction.pick_is_draw ? (
+                      <strong>Draw</strong>
+                    ) : (
+                      <TeamNameWithFlag team={pickedTeamRecord} />
+                    )}
                     <span>{predictedScore}</span>
                   </div>
                   <div>
                     <small>Actual Result</small>
-                    <strong>{actualResult}</strong>
+                    <ActualResult fixture={fixture} team1={team1} team2={team2} />
                     <span>{fixture.is_finished ? 'Final' : 'Pending result'}</span>
                   </div>
                 </div>
@@ -112,6 +117,48 @@ function History({ data, session }) {
   )
 }
 
+function ActualResult({ fixture, team1, team2 }) {
+  if (!fixture.is_finished || fixture.goals_team1 == null || fixture.goals_team2 == null) {
+    return <strong>Pending</strong>
+  }
+
+  return (
+    <div className="history-result-line">
+      <TeamNameWithFlag team={team1} compact />
+      <strong>{fixture.goals_team1}-{fixture.goals_team2}</strong>
+      <TeamNameWithFlag team={team2} alignRight compact />
+    </div>
+  )
+}
+
+function TeamNameWithFlag({ alignRight = false, compact = false, team }) {
+  return (
+    <span className={[
+      'history-team-name',
+      alignRight ? 'history-team-name-right' : '',
+      compact ? 'history-team-name-compact' : '',
+    ].filter(Boolean).join(' ')}>
+      <TeamFlag team={team} />
+      <strong>{team?.name || 'TBD'}</strong>
+    </span>
+  )
+}
+
+function TeamFlag({ team }) {
+  const flagValue = team?.flag || ''
+  const flagIsImage = flagValue.startsWith('http') || flagValue.startsWith('/')
+
+  if (flagIsImage) {
+    return <img alt="" className="flag-mark flag-image" src={flagValue} />
+  }
+
+  return (
+    <span className="flag-mark">
+      {flagValue || team?.short_name?.slice(0, 3) || 'TBD'}
+    </span>
+  )
+}
+
 export default memo(History)
 
 function BreakdownItem({ label, plain = false, value }) {
@@ -132,9 +179,4 @@ function BreakdownItem({ label, plain = false, value }) {
 function formatPredictedScore(prediction) {
   if (prediction.pred_goals_team1 == null || prediction.pred_goals_team2 == null) return 'No score prediction'
   return `Score ${prediction.pred_goals_team1}-${prediction.pred_goals_team2}`
-}
-
-function formatActualResult(fixture, team1, team2) {
-  if (!fixture.is_finished || fixture.goals_team1 == null || fixture.goals_team2 == null) return 'Pending'
-  return `${team1?.short_name || team1?.name || 'TBD'} ${fixture.goals_team1}-${fixture.goals_team2} ${team2?.short_name || team2?.name || 'TBD'}`
 }
