@@ -930,6 +930,14 @@ select:disabled {
   font-weight: 700;
 }
 
+.leaderboard-title-help {
+  display: inline-block;
+  margin-top: 5px;
+  color: #64748B;
+  font-size: 0.78rem;
+  font-weight: 750;
+}
+
 .competition-summary {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -1036,14 +1044,29 @@ select:disabled {
   align-items: center;
 }
 
-.table-player strong {
+.table-player-copy {
   min-width: 0;
+}
+
+.table-player-copy strong,
+.rank-title {
+  display: block;
   overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.table-player-copy strong {
   color: var(--text);
   font-size: 0.95rem;
   font-weight: 950;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+}
+
+.rank-title {
+  margin-top: 2px;
+  color: #7A5B16;
+  font-size: 0.76rem;
+  font-weight: 900;
 }
 
 .table-avatar {

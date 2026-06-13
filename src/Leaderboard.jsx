@@ -14,6 +14,12 @@ function Leaderboard({ data, session }) {
         <div>
           <h2>Leaderboard</h2>
           <p>Compare points, accuracy and exact scores.</p>
+          <small
+            className="leaderboard-title-help"
+            title="Rank titles unlock from completed result predictions, accuracy, and exact scores."
+          >
+            Rank titles unlock as tournament results come in.
+          </small>
         </div>
       </div>
 
@@ -62,7 +68,12 @@ function Leaderboard({ data, session }) {
                     ) : (
                       <div className="avatar avatar-initial table-avatar">{initialFor(row.name)}</div>
                     )}
-                    <strong>{row.name}</strong>
+                    <div className="table-player-copy">
+                      <strong>{row.name}</strong>
+                      <span className="rank-title" title={row.rankTitle.description}>
+                        {row.rankTitle.label}
+                      </span>
+                    </div>
                   </div>
                 </td>
                 <td className="table-points" data-label="Points">
@@ -130,6 +141,13 @@ function buildLeaderboardView(data, currentUserId) {
       accuracy: analytics.finishedPicks
         ? (analytics.correctPicks / analytics.finishedPicks) * 100
         : 0,
+      rankTitle: rankTitleFor({
+        accuracy: analytics.finishedPicks
+          ? (analytics.correctPicks / analytics.finishedPicks) * 100
+          : 0,
+        exactScores: analytics.exactScores,
+        finishedPicks: analytics.finishedPicks,
+      }),
     }
   })
 
@@ -182,4 +200,39 @@ function maxBy(rows, getValue) {
 
 function initialFor(name) {
   return String(name || 'P').trim().slice(0, 1).toUpperCase()
+}
+
+function rankTitleFor({ accuracy, exactScores, finishedPicks }) {
+  if (finishedPicks >= 50 && accuracy >= 70 && exactScores >= 3) {
+    return {
+      label: '👑 Oracle',
+      description: 'Unlocked with 50 completed result predictions, 70% accuracy, and 3 exact scores.',
+    }
+  }
+
+  if (finishedPicks >= 35 && accuracy >= 65) {
+    return {
+      label: '🏆 World Cup Master',
+      description: 'Unlocked with 35 completed result predictions and 65% accuracy.',
+    }
+  }
+
+  if (finishedPicks >= 20 && accuracy >= 60) {
+    return {
+      label: '🎯 Tournament Expert',
+      description: 'Unlocked with 20 completed result predictions and 60% accuracy.',
+    }
+  }
+
+  if (finishedPicks >= 10 && accuracy >= 50) {
+    return {
+      label: '⚽ Match Analyst',
+      description: 'Unlocked with 10 completed result predictions and 50% accuracy.',
+    }
+  }
+
+  return {
+    label: '🌱 Rookie Predictor',
+    description: 'Default title for every player.',
+  }
 }
