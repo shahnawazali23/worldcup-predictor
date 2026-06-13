@@ -29,35 +29,55 @@ function Leaderboard({ data, session }) {
         </div>
       )}
 
-      <div className="competition-table">
-        {rows.map((row, index) => (
-          <article
-            className={[
-              'competition-row',
-              index === 0 ? 'competition-row-leader' : '',
-              row.id === session?.user?.id ? 'competition-row-current' : '',
-            ].filter(Boolean).join(' ')}
-            key={row.id}
-          >
-            <div className="competition-rank">#{index + 1}</div>
-            {row.avatar ? (
-              <img alt="" className="avatar competition-avatar" src={row.avatar} />
-            ) : (
-              <div className="avatar avatar-initial competition-avatar">{initialFor(row.name)}</div>
-            )}
-            <div className="competition-player">
-              <strong>{row.name}</strong>
-              <span>
-                {row.predictionsMade} predictions &bull; {row.correctPicks} correct &bull;{' '}
-                {row.accuracy.toFixed(0)}% accuracy &bull; {row.exactScores} exact scores
-              </span>
-            </div>
-            <div className="competition-points">
-              <strong>{row.points}</strong>
-              <span>pts</span>
-            </div>
-          </article>
-        ))}
+      <div className="points-table-wrap">
+        <table className="points-table">
+          <thead>
+            <tr>
+              <th>Rank</th>
+              <th>Player</th>
+              <th>Points</th>
+              <th>Predictions</th>
+              <th>Correct</th>
+              <th>Wrong</th>
+              <th>Accuracy</th>
+              <th>Exact Scores</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row, index) => (
+              <tr
+                className={[
+                  index === 0 ? 'points-table-leader' : '',
+                  row.id === session?.user?.id ? 'points-table-current' : '',
+                ].filter(Boolean).join(' ')}
+                key={row.id}
+              >
+                <td data-label="Rank">
+                  <strong className="table-rank">#{index + 1}</strong>
+                </td>
+                <td data-label="Player">
+                  <div className="table-player">
+                    {row.avatar ? (
+                      <img alt="" className="avatar table-avatar" src={row.avatar} />
+                    ) : (
+                      <div className="avatar avatar-initial table-avatar">{initialFor(row.name)}</div>
+                    )}
+                    <strong>{row.name}</strong>
+                  </div>
+                </td>
+                <td className="table-points" data-label="Points">
+                  <strong>{row.points}</strong>
+                  <span>pts</span>
+                </td>
+                <td data-label="Predictions">{row.predictionsMade}</td>
+                <td data-label="Correct">{row.correctPicks}</td>
+                <td data-label="Wrong">{row.wrongPicks}</td>
+                <td data-label="Accuracy">{row.accuracy.toFixed(0)}%</td>
+                <td data-label="Exact Scores">{row.exactScores}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
 
       {rows.length === 0 && <div className="panel empty-state">No players yet.</div>}
@@ -80,6 +100,7 @@ function buildLeaderboardView(data, currentUserId) {
         exactScores: 0,
         finishedPicks: 0,
         predictionsMade: 0,
+        wrongPicks: 0,
       },
     ]),
   )
@@ -97,6 +118,7 @@ function buildLeaderboardView(data, currentUserId) {
     const score = scoreMatch(fixture, prediction, data.teamsById)
     analytics.finishedPicks += 1
     if (score.correctPick) analytics.correctPicks += 1
+    if (!score.correctPick) analytics.wrongPicks += 1
     if (score.scoreline === 3) analytics.exactScores += 1
   })
 
