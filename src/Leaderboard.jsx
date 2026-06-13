@@ -9,11 +9,18 @@ function Leaderboard({ data, session }) {
   )
 
   return (
-    <section className="screen-stack leaderboard-screen">
+    <section className="screen-stack competition-leaderboard">
+      <div className="leaderboard-page-head">
+        <div>
+          <h2>Leaderboard</h2>
+          <p>Compare points, accuracy and exact scores.</p>
+        </div>
+      </div>
+
       {summaryCards.length > 0 && (
-        <div className="leader-summary-cards">
+        <div className="competition-summary">
           {summaryCards.map((card) => (
-            <div className="leader-summary-card" key={card.label}>
+            <div className="competition-summary-card" key={card.label}>
               <span>{card.label}</span>
               <strong>{card.name}</strong>
               <small>{card.value}</small>
@@ -22,30 +29,30 @@ function Leaderboard({ data, session }) {
         </div>
       )}
 
-      <div className="leaderboard">
+      <div className="competition-table">
         {rows.map((row, index) => (
           <article
             className={[
-              'leader-row',
-              index === 0 ? 'leader' : '',
-              row.id === session?.user?.id ? 'current-user' : '',
+              'competition-row',
+              index === 0 ? 'competition-row-leader' : '',
+              row.id === session?.user?.id ? 'competition-row-current' : '',
             ].filter(Boolean).join(' ')}
             key={row.id}
           >
-            <div className="rank">#{index + 1}</div>
+            <div className="competition-rank">#{index + 1}</div>
             {row.avatar ? (
-              <img alt="" className="avatar" src={row.avatar} />
+              <img alt="" className="avatar competition-avatar" src={row.avatar} />
             ) : (
-              <div className="avatar avatar-initial">{initialFor(row.name)}</div>
+              <div className="avatar avatar-initial competition-avatar">{initialFor(row.name)}</div>
             )}
-            <div className="leader-main">
+            <div className="competition-player">
               <strong>{row.name}</strong>
               <span>
                 {row.predictionsMade} predictions &bull; {row.correctPicks} correct &bull;{' '}
                 {row.accuracy.toFixed(0)}% accuracy &bull; {row.exactScores} exact scores
               </span>
             </div>
-            <div className="points">
+            <div className="competition-points">
               <strong>{row.points}</strong>
               <span>pts</span>
             </div>
@@ -128,22 +135,18 @@ function buildSummaryCards(rows) {
 
   const completedRows = rows.filter((row) => row.finishedPicks > 0)
   const mostAccurate = maxBy(completedRows, (row) => row.accuracy)
-  if (mostAccurate) {
-    cards.push({
-      label: 'Most Accurate',
-      name: mostAccurate.name,
-      value: `${mostAccurate.accuracy.toFixed(0)}%`,
-    })
-  }
+  cards.push({
+    label: 'Most Accurate',
+    name: mostAccurate?.name || 'No results yet',
+    value: mostAccurate ? `${mostAccurate.accuracy.toFixed(0)}%` : '-',
+  })
 
-  const mostExact = maxBy(completedRows, (row) => row.exactScores)
-  if (mostExact?.exactScores > 0) {
-    cards.push({
-      label: 'Most Exact Scores',
-      name: mostExact.name,
-      value: `${mostExact.exactScores}`,
-    })
-  }
+  const mostExact = maxBy(rows, (row) => row.exactScores)
+  cards.push({
+    label: 'Most Exact Scores',
+    name: mostExact?.name || 'No players yet',
+    value: `${mostExact?.exactScores || 0}`,
+  })
 
   return cards
 }

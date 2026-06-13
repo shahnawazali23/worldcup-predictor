@@ -359,8 +359,7 @@ select:disabled {
 
 .fixture-card,
 .panel,
-.rule-card,
-.leader-row {
+.rule-card {
   border: 1px solid #dfe7f0;
   border-radius: 8px;
   background: rgba(255, 255, 255, 0.94);
@@ -906,42 +905,147 @@ select:disabled {
   background: #fff0ee;
 }
 
-.leaderboard {
-  display: grid;
+.competition-leaderboard {
   gap: 10px;
 }
 
-.leader-summary-cards {
+.leaderboard-page-head {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  padding: 2px 0 4px;
+}
+
+.leaderboard-page-head h2 {
+  margin: 0;
+  color: var(--navy);
+  font-size: clamp(1.8rem, 4vw, 3rem);
+  line-height: 0.95;
+}
+
+.leaderboard-page-head p {
+  margin: 6px 0 0;
+  color: #475569;
+  font-size: 0.95rem;
+  font-weight: 700;
+}
+
+.competition-summary {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 10px;
+  gap: 8px;
 }
 
-.leader-summary-card {
+.competition-summary-card {
   min-width: 0;
-  padding: 12px 14px;
-  border: 1px solid rgba(200, 164, 93, 0.32);
+  padding: 11px 13px;
+  border: 1px solid rgba(16, 42, 67, 0.12);
   border-radius: 8px;
-  background: #FFFDF7;
-  box-shadow: 0 12px 28px rgba(16, 42, 67, 0.06);
+  background: #FFFFFF;
+  box-shadow: 0 8px 20px rgba(16, 42, 67, 0.05);
 }
 
-.leader-summary-card span,
-.leader-summary-card small {
+.competition-summary-card span,
+.competition-summary-card small {
   display: block;
   color: #475569;
-  font-size: 0.78rem;
-  font-weight: 800;
+  font-size: 0.76rem;
+  font-weight: 850;
 }
 
-.leader-summary-card strong {
+.competition-summary-card strong {
   display: block;
   overflow: hidden;
-  margin: 3px 0;
+  margin: 2px 0;
   color: var(--navy);
   font-size: 1.05rem;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.competition-table {
+  display: grid;
+  gap: 6px;
+}
+
+.competition-row {
+  display: grid;
+  grid-template-columns: 48px 38px minmax(0, 1fr) 88px;
+  gap: 11px;
+  align-items: center;
+  min-height: 68px;
+  padding: 10px 12px;
+  border: 1px solid rgba(16, 42, 67, 0.1);
+  border-radius: 8px;
+  background: #FFFFFF;
+  box-shadow: 0 8px 20px rgba(16, 42, 67, 0.05);
+}
+
+.competition-row-leader {
+  border-color: rgba(200, 164, 93, 0.42);
+  background: #FFFDF7;
+}
+
+.competition-row-current {
+  border-color: rgba(16, 42, 67, 0.42);
+  box-shadow: inset 4px 0 0 var(--navy), 0 10px 24px rgba(16, 42, 67, 0.08);
+}
+
+.competition-rank {
+  color: #64748B;
+  font-size: 0.95rem;
+  font-weight: 950;
+}
+
+.competition-avatar {
+  width: 36px;
+  height: 36px;
+  flex-basis: 36px;
+}
+
+.competition-player {
+  min-width: 0;
+}
+
+.competition-player strong,
+.competition-player span {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.competition-player strong {
+  color: var(--text);
+  font-size: 1.02rem;
+  font-weight: 950;
+}
+
+.competition-player span {
+  margin-top: 3px;
+  color: #475569;
+  font-size: 0.86rem;
+  font-weight: 750;
+}
+
+.competition-points {
+  display: grid;
+  justify-items: end;
+  color: var(--navy);
+  text-align: right;
+}
+
+.competition-points strong {
+  line-height: 0.95;
+  font-size: 2.05rem;
+  font-weight: 950;
+}
+
+.competition-points span {
+  color: #475569;
+  font-size: 0.74rem;
+  font-weight: 950;
+  text-transform: uppercase;
 }
 
 .history-list {
@@ -995,77 +1099,6 @@ select:disabled {
   color: #17243a;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.leader-row {
-  display: grid;
-  grid-template-columns: 54px 38px minmax(0, 1fr) 92px;
-  grid-template-areas: "rank avatar main points";
-  gap: 12px;
-  align-items: center;
-  padding: 12px 14px;
-}
-
-.leader-row.leader {
-  border-color: #f1c857;
-  background: #fff9e8;
-}
-
-.leader-row.current-user {
-  border-color: rgba(16, 42, 67, 0.42);
-  box-shadow: inset 4px 0 0 var(--navy), 0 16px 34px rgba(16, 42, 67, 0.08);
-}
-
-.rank,
-.points {
-  font-weight: 950;
-}
-
-.rank {
-  grid-area: rank;
-  color: #6f8095;
-}
-
-.leader-row .avatar {
-  grid-area: avatar;
-}
-
-.leader-main {
-  grid-area: main;
-  min-width: 0;
-}
-
-.leader-main strong,
-.leader-main span {
-  display: block;
-}
-
-.leader-main span,
-.leader-meta,
-.muted {
-  color: #6a7b91;
-  font-size: 0.88rem;
-}
-
-.points {
-  grid-area: points;
-  display: grid;
-  justify-items: end;
-  text-align: right;
-  color: var(--navy);
-}
-
-.points strong {
-  line-height: 1;
-  font-size: 2rem;
-  font-weight: 950;
-}
-
-.points span {
-  color: #475569;
-  font-size: 0.78rem;
-  font-weight: 900;
-  text-transform: uppercase;
 }
 
 .rules-layout {
@@ -1228,8 +1261,6 @@ select:disabled {
 .team-pick small,
 .draw-pick small,
 .bonus-panel small,
-.leader-main span,
-.leader-meta,
 .muted {
   color: var(--muted);
 }
@@ -1355,7 +1386,6 @@ select:disabled {
 .fixture-card,
 .panel,
 .rule-card,
-.leader-row,
 .history-row {
   border-color: var(--line);
   background: var(--surface);
@@ -1645,7 +1675,6 @@ select:disabled {
 .fixture-stage,
 .history-match strong,
 .history-picks strong,
-.leader-main strong,
 .panel h3,
 .rule-card h3 {
   color: var(--text);
@@ -1654,15 +1683,6 @@ select:disabled {
 .rule-card p,
 .panel p {
   color: var(--muted);
-}
-
-.leader-row.leader {
-  border-color: rgba(200, 164, 93, 0.44);
-  background: #FFF8E8;
-}
-
-.points {
-  color: var(--navy);
 }
 
 .history-picks div {
@@ -2294,13 +2314,12 @@ select:disabled {
     justify-content: flex-start;
   }
 
-  .leader-summary-cards {
+  .competition-summary {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
-  .leader-row {
-    grid-template-columns: 42px 38px minmax(0, 1fr) 70px;
-    grid-template-areas: "rank avatar main points";
+  .competition-row {
+    grid-template-columns: 42px 36px minmax(0, 1fr) 70px;
   }
 
   .result-form {
@@ -2320,8 +2339,33 @@ select:disabled {
     width: min(100% - 20px, 1180px);
   }
 
-  .leader-summary-cards {
+  .competition-summary {
     grid-template-columns: 1fr;
+  }
+
+  .competition-row {
+    grid-template-columns: 38px 34px minmax(0, 1fr) 58px;
+    gap: 8px;
+    min-height: 64px;
+    padding: 9px 10px;
+  }
+
+  .competition-avatar {
+    width: 34px;
+    height: 34px;
+    flex-basis: 34px;
+  }
+
+  .competition-player strong {
+    font-size: 0.96rem;
+  }
+
+  .competition-player span {
+    font-size: 0.78rem;
+  }
+
+  .competition-points strong {
+    font-size: 1.55rem;
   }
 
   .main-pick-row {
