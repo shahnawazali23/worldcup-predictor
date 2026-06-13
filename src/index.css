@@ -1147,6 +1147,43 @@ select:disabled {
   white-space: nowrap;
 }
 
+.history-stat-cards {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.history-stat-card {
+  min-width: 0;
+  padding: 12px 14px;
+  border: 1px solid rgba(16, 42, 67, 0.12);
+  border-radius: 8px;
+  background: #FFFFFF;
+  box-shadow: 0 8px 20px rgba(16, 42, 67, 0.05);
+}
+
+.history-stat-card span {
+  display: block;
+  overflow: hidden;
+  color: #475569;
+  font-size: 0.78rem;
+  font-weight: 850;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.history-stat-card strong {
+  display: block;
+  overflow: hidden;
+  margin-top: 4px;
+  color: var(--navy);
+  font-size: clamp(1.25rem, 2.6vw, 1.8rem);
+  font-weight: 950;
+  line-height: 1.05;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .rules-layout {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -2371,6 +2408,10 @@ select:disabled {
     justify-content: flex-start;
   }
 
+  .history-stat-cards {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .result-form {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -2389,6 +2430,10 @@ select:disabled {
   }
 
   .competition-summary {
+    grid-template-columns: 1fr;
+  }
+
+  .history-stat-cards {
     grid-template-columns: 1fr;
   }
 

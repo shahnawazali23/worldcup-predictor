@@ -30,14 +30,15 @@ function History({ data, session }) {
       .sort((a, b) => fixtureKickoffMs(b.fixture) - fixtureKickoffMs(a.fixture))
   }, [data, now, session.user.id])
 
+  const summary = useMemo(() => buildHistorySummary(rows), [rows])
+
   return (
     <section className="screen-stack">
-      <div className="hero-band compact">
-        <div>
-          <p className="eyebrow">Your record</p>
-          <h2>History</h2>
-          <p>Past matches and the picks you locked in.</p>
-        </div>
+      <div className="history-stat-cards">
+        <SummaryCard label="Total Points" icon="🏆" value={summary.totalPoints} />
+        <SummaryCard label="Accuracy" icon="🎯" value={`${summary.accuracy.toFixed(0)}%`} />
+        <SummaryCard label="Current Streak" icon="🔥" value={summary.currentStreak} />
+        <SummaryCard label="Current Rank" icon="👑" value={summary.rankTitle.label} title={summary.rankTitle.description} />
       </div>
 
       <div className="history-list">
@@ -124,6 +125,15 @@ function History({ data, session }) {
   )
 }
 
+function SummaryCard({ icon, label, title, value }) {
+  return (
+    <div className="history-stat-card" title={title}>
+      <span>{icon} {label}</span>
+      <strong>{value}</strong>
+    </div>
+  )
+}
+
 function ActualResult({ fixture, team1, team2 }) {
   if (!fixture.is_finished || fixture.goals_team1 == null || fixture.goals_team2 == null) {
     return <strong>Pending</strong>
@@ -168,6 +178,32 @@ function TeamFlag({ team }) {
 
 export default memo(History)
 
+function buildHistorySummary(rows) {
+  const completedRows = rows.filter((row) => row.score)
+  const completedResultRows = completedRows.filter((row) =>
+    row.prediction.picked_team_id || row.prediction.pick_is_draw
+  )
+  const totalPoints = completedRows.reduce((total, row) => total + row.score.total, 0)
+  const correctPicks = completedResultRows.filter((row) => row.score.correctPick).length
+  const accuracy = completedResultRows.length ? (correctPicks / completedResultRows.length) * 100 : 0
+  const currentStreak = completedResultRows.reduce((streak, row) => {
+    if (streak.done) return streak
+    if (row.score.correctPick) return { count: streak.count + 1, done: false }
+    return { count: streak.count, done: true }
+  }, { count: 0, done: false }).count
+
+  return {
+    accuracy,
+    currentStreak,
+    rankTitle: rankTitleFor({
+      accuracy,
+      exactScores: completedResultRows.filter((row) => row.score.scoreline === 3).length,
+      finishedPicks: completedResultRows.length,
+    }),
+    totalPoints,
+  }
+}
+
 function getResultStatus(fixture, prediction, score) {
   if (!prediction?.pick_is_draw && !prediction?.picked_team_id) {
     return { label: 'No Pick', tone: 'neutral' }
@@ -198,4 +234,39 @@ function BreakdownItem({ joker = false, label, value }) {
 function formatPredictedScore(prediction) {
   if (prediction.pred_goals_team1 == null || prediction.pred_goals_team2 == null) return 'No score prediction'
   return `Score ${prediction.pred_goals_team1}-${prediction.pred_goals_team2}`
+}
+
+function rankTitleFor({ accuracy, exactScores, finishedPicks }) {
+  if (finishedPicks >= 50 && accuracy >= 70 && exactScores >= 3) {
+    return {
+      label: '👑 Oracle',
+      description: 'Unlocked with 50 completed result predictions, 70% accuracy, and 3 exact scores.',
+    }
+  }
+
+  if (finishedPicks >= 35 && accuracy >= 65) {
+    return {
+      label: '🏆 World Cup Master',
+      description: 'Unlocked with 35 completed result predictions and 65% accuracy.',
+    }
+  }
+
+  if (finishedPicks >= 20 && accuracy >= 60) {
+    return {
+      label: '🎯 Tournament Expert',
+      description: 'Unlocked with 20 completed result predictions and 60% accuracy.',
+    }
+  }
+
+  if (finishedPicks >= 10 && accuracy >= 50) {
+    return {
+      label: '⚽ Match Analyst',
+      description: 'Unlocked with 10 completed result predictions and 50% accuracy.',
+    }
+  }
+
+  return {
+    label: '🌱 Rookie Predictor',
+    description: 'Default title for every player.',
+  }
 }
