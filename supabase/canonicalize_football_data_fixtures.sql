@@ -1,61 +1,47 @@
--- One-time migration: make football-data fixture rows canonical.
+-- One-time migration: make football-data.org the only fixture source.
 --
 -- Goal:
--- - Keep football-data fixture rows.
--- - Move predictions from duplicate legacy/sheet fixture rows to football-data rows.
--- - Preserve prediction data in an audit backup table before changing references.
--- - Remove legacy/sheet duplicate fixture rows only after prediction references are moved.
+-- - Backup predictions before changing fixture references.
+-- - Build a report mapping old legacy fixture IDs to football-data fixture IDs.
+-- - Reattach existing predictions to matching football-data fixtures.
+-- - Delete all legacy fixtures.
+-- - Keep only football-data fixtures in public.fixtures.
 --
--- Duplicate identity:
--- - Same competition
--- - Same stage
--- - Same team1_id/team2_id
--- - Same canonical kickoff instant: coalesce(kickoff_time_utc, kickoff_at)
+-- Matching key:
+-- - competition
+-- - stage
+-- - team1_id/team2_id
+-- - canonical kickoff instant: coalesce(kickoff_time_utc, kickoff_at)
 --
--- Important:
--- - Review the DRY RUN queries first.
--- - Run the MIGRATION section only after the duplicate map looks correct.
--- - The prediction write validation trigger is disabled only inside this transaction because
---   this is a historical data repair for already locked/finished fixtures.
+-- Safety:
+-- - The migration aborts if any prediction on a legacy fixture cannot be mapped.
+-- - The migration aborts if prediction count changes.
+-- - The prediction write validation trigger is disabled only inside this transaction
+--   because this is a historical repair for already locked/finished fixtures.
 
 -- ============================================================================
--- DRY RUN / BEFORE VERIFICATION
+-- BEFORE / DRY RUN
 -- ============================================================================
 
--- Total prediction count before migration.
+-- 1. Prediction count before migration.
 select count(*) as prediction_count_before
 from public.predictions;
 
--- Duplicate fixture groups before migration.
-with duplicate_groups as (
-  select
-    coalesce(competition, 'FIFA World Cup 2026') as competition,
-    coalesce(stage, '') as stage,
-    team1_id,
-    team2_id,
-    coalesce(kickoff_time_utc, kickoff_at) as kickoff_time_utc,
-    count(*) as fixture_count,
-    count(*) filter (where api_provider = 'football-data') as football_data_count,
-    count(*) filter (where coalesce(api_provider, '') <> 'football-data') as legacy_count,
-    array_agg(id order by api_provider, id) as fixture_ids
-  from public.fixtures
-  where team1_id is not null
-    and team2_id is not null
-    and coalesce(kickoff_time_utc, kickoff_at) is not null
-  group by 1, 2, 3, 4, 5
-  having count(*) > 1
-)
-select *
-from duplicate_groups
-order by kickoff_time_utc, stage;
+-- 2. Fixture counts by provider before migration.
+select
+  coalesce(api_provider, '<null>') as api_provider,
+  count(*) as fixture_count
+from public.fixtures
+group by 1
+order by 1;
 
--- Exact legacy -> football-data mapping that the migration will use.
-with duplicate_fixture_map as (
+-- 3. Mapping report: old legacy fixture IDs -> football-data fixture IDs.
+with fixture_map as (
   select
-    legacy.id as legacy_fixture_id,
+    legacy.id as old_fixture_id,
     fd.id as football_data_fixture_id,
-    legacy.api_provider as legacy_provider,
-    legacy.api_fixture_id as legacy_api_fixture_id,
+    legacy.api_provider as old_provider,
+    legacy.api_fixture_id as old_api_fixture_id,
     fd.api_fixture_id as football_data_api_fixture_id,
     legacy.home_team,
     legacy.away_team,
@@ -64,7 +50,7 @@ with duplicate_fixture_map as (
     legacy.competition,
     count(p.id) as predictions_to_move
   from public.fixtures legacy
-  join public.fixtures fd
+  left join public.fixtures fd
     on fd.api_provider = 'football-data'
    and coalesce(fd.competition, 'FIFA World Cup 2026') = coalesce(legacy.competition, 'FIFA World Cup 2026')
    and coalesce(fd.stage, '') = coalesce(legacy.stage, '')
@@ -73,10 +59,7 @@ with duplicate_fixture_map as (
    and coalesce(fd.kickoff_time_utc, fd.kickoff_at) = coalesce(legacy.kickoff_time_utc, legacy.kickoff_at)
   left join public.predictions p
     on p.fixture_id = legacy.id
-  where coalesce(legacy.api_provider, '') <> 'football-data'
-    and legacy.team1_id is not null
-    and legacy.team2_id is not null
-    and coalesce(legacy.kickoff_time_utc, legacy.kickoff_at) is not null
+  where legacy.api_provider = 'legacy'
   group by
     legacy.id,
     fd.id,
@@ -91,13 +74,37 @@ with duplicate_fixture_map as (
     legacy.competition
 )
 select *
-from duplicate_fixture_map
+from fixture_map
 order by kickoff_time_utc, home_team, away_team;
 
--- Conflict check: same user has a prediction on both legacy and football-data rows.
--- These are preserved in the backup table; the migration keeps the newest updated prediction.
-with duplicate_fixture_map as (
-  select legacy.id as legacy_fixture_id, fd.id as football_data_fixture_id
+-- 4. Must be zero before migration: legacy predictions that cannot be mapped.
+with fixture_map as (
+  select legacy.id as old_fixture_id, fd.id as football_data_fixture_id
+  from public.fixtures legacy
+  left join public.fixtures fd
+    on fd.api_provider = 'football-data'
+   and coalesce(fd.competition, 'FIFA World Cup 2026') = coalesce(legacy.competition, 'FIFA World Cup 2026')
+   and coalesce(fd.stage, '') = coalesce(legacy.stage, '')
+   and fd.team1_id = legacy.team1_id
+   and fd.team2_id = legacy.team2_id
+   and coalesce(fd.kickoff_time_utc, fd.kickoff_at) = coalesce(legacy.kickoff_time_utc, legacy.kickoff_at)
+  where legacy.api_provider = 'legacy'
+)
+select
+  p.id as prediction_id,
+  p.user_id,
+  p.fixture_id as unmapped_legacy_fixture_id
+from public.predictions p
+join fixture_map m
+  on m.old_fixture_id = p.fixture_id
+where m.football_data_fixture_id is null
+order by p.user_id, p.fixture_id;
+
+-- 5. Must be zero before migration: same user predicted both legacy and football-data rows.
+-- If this returns rows, resolve manually before running the migration because preserving
+-- prediction count is impossible with the unique (user_id, fixture_id) constraint.
+with fixture_map as (
+  select legacy.id as old_fixture_id, fd.id as football_data_fixture_id
   from public.fixtures legacy
   join public.fixtures fd
     on fd.api_provider = 'football-data'
@@ -106,180 +113,23 @@ with duplicate_fixture_map as (
    and fd.team1_id = legacy.team1_id
    and fd.team2_id = legacy.team2_id
    and coalesce(fd.kickoff_time_utc, fd.kickoff_at) = coalesce(legacy.kickoff_time_utc, legacy.kickoff_at)
-  where coalesce(legacy.api_provider, '') <> 'football-data'
+  where legacy.api_provider = 'legacy'
 )
 select
   legacy_prediction.user_id,
-  legacy_prediction.fixture_id as legacy_fixture_id,
-  football_data_prediction.fixture_id as football_data_fixture_id,
   legacy_prediction.id as legacy_prediction_id,
-  football_data_prediction.id as football_data_prediction_id,
-  legacy_prediction.updated_at as legacy_updated_at,
-  football_data_prediction.updated_at as football_data_updated_at
-from duplicate_fixture_map m
+  canonical_prediction.id as football_data_prediction_id,
+  legacy_prediction.fixture_id as old_fixture_id,
+  canonical_prediction.fixture_id as football_data_fixture_id
+from fixture_map m
 join public.predictions legacy_prediction
-  on legacy_prediction.fixture_id = m.legacy_fixture_id
-join public.predictions football_data_prediction
-  on football_data_prediction.fixture_id = m.football_data_fixture_id
- and football_data_prediction.user_id = legacy_prediction.user_id
-order by legacy_prediction.user_id;
+  on legacy_prediction.fixture_id = m.old_fixture_id
+join public.predictions canonical_prediction
+  on canonical_prediction.fixture_id = m.football_data_fixture_id
+ and canonical_prediction.user_id = legacy_prediction.user_id
+order by legacy_prediction.user_id, legacy_prediction.fixture_id;
 
--- ============================================================================
--- MIGRATION
--- ============================================================================
-
-begin;
-
-create table if not exists public.fixture_canonicalization_backup (
-  id bigserial primary key,
-  migrated_at timestamptz not null default now(),
-  backup_kind text not null,
-  old_fixture_id text not null,
-  new_fixture_id text,
-  prediction_id text,
-  prediction_row jsonb,
-  fixture_row jsonb
-);
-
-create temp table duplicate_fixture_map (
-  legacy_fixture_id public.fixtures.id%type primary key,
-  football_data_fixture_id public.fixtures.id%type not null
-) on commit drop;
-
-insert into duplicate_fixture_map (legacy_fixture_id, football_data_fixture_id)
-select legacy.id, fd.id
-from public.fixtures legacy
-join public.fixtures fd
-  on fd.api_provider = 'football-data'
- and coalesce(fd.competition, 'FIFA World Cup 2026') = coalesce(legacy.competition, 'FIFA World Cup 2026')
- and coalesce(fd.stage, '') = coalesce(legacy.stage, '')
- and fd.team1_id = legacy.team1_id
- and fd.team2_id = legacy.team2_id
- and coalesce(fd.kickoff_time_utc, fd.kickoff_at) = coalesce(legacy.kickoff_time_utc, legacy.kickoff_at)
-where coalesce(legacy.api_provider, '') <> 'football-data'
-  and legacy.team1_id is not null
-  and legacy.team2_id is not null
-  and coalesce(legacy.kickoff_time_utc, legacy.kickoff_at) is not null;
-
--- Backup every prediction that will be touched or removed.
-insert into public.fixture_canonicalization_backup (
-  backup_kind,
-  old_fixture_id,
-  new_fixture_id,
-  prediction_id,
-  prediction_row
-)
-select
-  'legacy_prediction_before_move',
-  m.legacy_fixture_id::text,
-  m.football_data_fixture_id::text,
-  p.id::text,
-  to_jsonb(p)
-from duplicate_fixture_map m
-join public.predictions p
-  on p.fixture_id = m.legacy_fixture_id;
-
--- Backup the legacy fixture rows before deletion.
-insert into public.fixture_canonicalization_backup (
-  backup_kind,
-  old_fixture_id,
-  new_fixture_id,
-  fixture_row
-)
-select
-  'legacy_fixture_before_delete',
-  f.id::text,
-  m.football_data_fixture_id::text,
-  to_jsonb(f)
-from duplicate_fixture_map m
-join public.fixtures f
-  on f.id = m.legacy_fixture_id;
-
--- Data repair only: avoid blocked updates on already locked fixtures.
-alter table public.predictions disable trigger predictions_validate_write;
-
--- If a user has predictions on both duplicate rows, keep the newest updated prediction
--- values on the canonical football-data row.
-update public.predictions canonical_prediction
-set
-  picked_team_id = legacy_prediction.picked_team_id,
-  pick_is_draw = legacy_prediction.pick_is_draw,
-  pred_goals_team1 = legacy_prediction.pred_goals_team1,
-  pred_goals_team2 = legacy_prediction.pred_goals_team2,
-  penalty_call = legacy_prediction.penalty_call,
-  joker_used = legacy_prediction.joker_used,
-  updated_at = greatest(canonical_prediction.updated_at, legacy_prediction.updated_at)
-from duplicate_fixture_map m
-join public.predictions legacy_prediction
-  on legacy_prediction.fixture_id = m.legacy_fixture_id
-where canonical_prediction.fixture_id = m.football_data_fixture_id
-  and canonical_prediction.user_id = legacy_prediction.user_id
-  and legacy_prediction.updated_at >= canonical_prediction.updated_at;
-
--- Remove losing duplicate legacy predictions where a canonical prediction already exists.
--- They are already preserved in fixture_canonicalization_backup.
-delete from public.predictions legacy_prediction
-using duplicate_fixture_map m
-where legacy_prediction.fixture_id = m.legacy_fixture_id
-  and exists (
-    select 1
-    from public.predictions canonical_prediction
-    where canonical_prediction.fixture_id = m.football_data_fixture_id
-      and canonical_prediction.user_id = legacy_prediction.user_id
-  );
-
--- Move all remaining legacy predictions to their canonical football-data fixture row.
-update public.predictions p
-set
-  fixture_id = m.football_data_fixture_id,
-  updated_at = now()
-from duplicate_fixture_map m
-where p.fixture_id = m.legacy_fixture_id;
-
-alter table public.predictions enable trigger predictions_validate_write;
-
--- Delete legacy duplicate fixture rows after predictions no longer reference them.
-delete from public.fixtures legacy
-using duplicate_fixture_map m
-where legacy.id = m.legacy_fixture_id
-  and not exists (
-    select 1
-    from public.predictions p
-    where p.fixture_id = legacy.id
-  );
-
-commit;
-
--- ============================================================================
--- AFTER VERIFICATION
--- ============================================================================
-
--- Total prediction count after migration. This should match the before count unless
--- conflict rows existed. If conflicts existed, all removed conflict rows are preserved
--- in public.fixture_canonicalization_backup.
-select count(*) as prediction_count_after
-from public.predictions;
-
--- Any predictions still attached to legacy duplicates should be zero.
-with duplicate_fixture_map as (
-  select legacy.id as legacy_fixture_id, fd.id as football_data_fixture_id
-  from public.fixtures legacy
-  join public.fixtures fd
-    on fd.api_provider = 'football-data'
-   and coalesce(fd.competition, 'FIFA World Cup 2026') = coalesce(legacy.competition, 'FIFA World Cup 2026')
-   and coalesce(fd.stage, '') = coalesce(legacy.stage, '')
-   and fd.team1_id = legacy.team1_id
-   and fd.team2_id = legacy.team2_id
-   and coalesce(fd.kickoff_time_utc, fd.kickoff_at) = coalesce(legacy.kickoff_time_utc, legacy.kickoff_at)
-  where coalesce(legacy.api_provider, '') <> 'football-data'
-)
-select count(*) as predictions_still_on_legacy_duplicates
-from duplicate_fixture_map m
-join public.predictions p
-  on p.fixture_id = m.legacy_fixture_id;
-
--- Duplicate fixture groups after migration. This should return zero rows for legacy
--- vs football-data duplicate groups with assigned teams.
+-- 6. Duplicate match groups before migration.
 with duplicate_groups as (
   select
     coalesce(competition, 'FIFA World Cup 2026') as competition,
@@ -288,9 +138,8 @@ with duplicate_groups as (
     team2_id,
     coalesce(kickoff_time_utc, kickoff_at) as kickoff_time_utc,
     count(*) as fixture_count,
-    count(*) filter (where api_provider = 'football-data') as football_data_count,
-    count(*) filter (where coalesce(api_provider, '') <> 'football-data') as legacy_count,
-    array_agg(id order by api_provider, id) as fixture_ids
+    array_agg(id order by api_provider, id) as fixture_ids,
+    array_agg(api_provider order by api_provider, id) as providers
   from public.fixtures
   where team1_id is not null
     and team2_id is not null
@@ -302,7 +151,303 @@ select *
 from duplicate_groups
 order by kickoff_time_utc, stage;
 
--- Sanity: Australia vs Turkey should now have predictions only on the football-data row.
+-- ============================================================================
+-- MIGRATION
+-- ============================================================================
+
+begin;
+
+create table if not exists public.fixture_canonicalization_backup (
+  id bigserial primary key,
+  migrated_at timestamptz not null default now(),
+  backup_kind text not null,
+  old_fixture_id text,
+  new_fixture_id text,
+  prediction_id text,
+  prediction_row jsonb,
+  fixture_row jsonb
+);
+
+create table if not exists public.fixture_canonicalization_map (
+  id bigserial primary key,
+  migrated_at timestamptz not null default now(),
+  old_fixture_id text not null,
+  new_fixture_id text,
+  old_provider text,
+  old_api_fixture_id text,
+  new_api_fixture_id text,
+  home_team text,
+  away_team text,
+  kickoff_time_utc timestamptz,
+  stage text,
+  competition text,
+  predictions_moved integer not null default 0
+);
+
+create temp table migration_counts (
+  prediction_count_before bigint not null
+) on commit drop;
+
+insert into migration_counts (prediction_count_before)
+select count(*)
+from public.predictions;
+
+create temp table fixture_map (
+  old_fixture_id public.fixtures.id%type primary key,
+  new_fixture_id public.fixtures.id%type,
+  old_provider text,
+  old_api_fixture_id text,
+  new_api_fixture_id text,
+  home_team text,
+  away_team text,
+  kickoff_time_utc timestamptz,
+  stage text,
+  competition text
+) on commit drop;
+
+insert into fixture_map (
+  old_fixture_id,
+  new_fixture_id,
+  old_provider,
+  old_api_fixture_id,
+  new_api_fixture_id,
+  home_team,
+  away_team,
+  kickoff_time_utc,
+  stage,
+  competition
+)
+select
+  legacy.id,
+  fd.id,
+  legacy.api_provider,
+  legacy.api_fixture_id,
+  fd.api_fixture_id,
+  legacy.home_team,
+  legacy.away_team,
+  coalesce(fd.kickoff_time_utc, fd.kickoff_at),
+  legacy.stage,
+  legacy.competition
+from public.fixtures legacy
+left join public.fixtures fd
+  on fd.api_provider = 'football-data'
+ and coalesce(fd.competition, 'FIFA World Cup 2026') = coalesce(legacy.competition, 'FIFA World Cup 2026')
+ and coalesce(fd.stage, '') = coalesce(legacy.stage, '')
+ and fd.team1_id = legacy.team1_id
+ and fd.team2_id = legacy.team2_id
+ and coalesce(fd.kickoff_time_utc, fd.kickoff_at) = coalesce(legacy.kickoff_time_utc, legacy.kickoff_at)
+where legacy.api_provider = 'legacy';
+
+-- Abort if any legacy prediction cannot be mapped to a football-data fixture.
+do $$
+declare
+  unmapped_prediction_count integer;
+begin
+  select count(*)
+    into unmapped_prediction_count
+  from public.predictions p
+  join fixture_map m
+    on m.old_fixture_id = p.fixture_id
+  where m.new_fixture_id is null;
+
+  if unmapped_prediction_count > 0 then
+    raise exception
+      'Cannot canonicalize fixtures: % legacy predictions have no matching football-data fixture',
+      unmapped_prediction_count;
+  end if;
+end $$;
+
+-- Abort if moving predictions would collide with existing football-data predictions.
+do $$
+declare
+  duplicate_prediction_count integer;
+begin
+  select count(*)
+    into duplicate_prediction_count
+  from public.predictions legacy_prediction
+  join fixture_map m
+    on m.old_fixture_id = legacy_prediction.fixture_id
+  join public.predictions canonical_prediction
+    on canonical_prediction.fixture_id = m.new_fixture_id
+   and canonical_prediction.user_id = legacy_prediction.user_id;
+
+  if duplicate_prediction_count > 0 then
+    raise exception
+      'Cannot canonicalize fixtures: % users have predictions on both legacy and football-data fixture rows',
+      duplicate_prediction_count;
+  end if;
+end $$;
+
+-- Backup full predictions table before touching fixture references.
+insert into public.fixture_canonicalization_backup (
+  backup_kind,
+  prediction_id,
+  prediction_row
+)
+select
+  'predictions_table_before_football_data_canonicalization',
+  p.id::text,
+  to_jsonb(p)
+from public.predictions p;
+
+-- Backup all legacy fixture rows before deletion.
+insert into public.fixture_canonicalization_backup (
+  backup_kind,
+  old_fixture_id,
+  new_fixture_id,
+  fixture_row
+)
+select
+  'legacy_fixture_before_delete',
+  f.id::text,
+  m.new_fixture_id::text,
+  to_jsonb(f)
+from public.fixtures f
+join fixture_map m
+  on m.old_fixture_id = f.id;
+
+-- Persist the mapping report.
+insert into public.fixture_canonicalization_map (
+  old_fixture_id,
+  new_fixture_id,
+  old_provider,
+  old_api_fixture_id,
+  new_api_fixture_id,
+  home_team,
+  away_team,
+  kickoff_time_utc,
+  stage,
+  competition,
+  predictions_moved
+)
+select
+  m.old_fixture_id::text,
+  m.new_fixture_id::text,
+  m.old_provider,
+  m.old_api_fixture_id,
+  m.new_api_fixture_id,
+  m.home_team,
+  m.away_team,
+  m.kickoff_time_utc,
+  m.stage,
+  m.competition,
+  count(p.id)::integer
+from fixture_map m
+left join public.predictions p
+  on p.fixture_id = m.old_fixture_id
+group by
+  m.old_fixture_id,
+  m.new_fixture_id,
+  m.old_provider,
+  m.old_api_fixture_id,
+  m.new_api_fixture_id,
+  m.home_team,
+  m.away_team,
+  m.kickoff_time_utc,
+  m.stage,
+  m.competition;
+
+-- Data repair only: avoid blocked updates on already locked fixtures.
+alter table public.predictions disable trigger predictions_validate_write;
+
+-- Move remaining legacy predictions to football-data fixtures.
+update public.predictions p
+set
+  fixture_id = m.new_fixture_id,
+  updated_at = now()
+from fixture_map m
+where p.fixture_id = m.old_fixture_id;
+
+alter table public.predictions enable trigger predictions_validate_write;
+
+-- Delete every legacy fixture. At this point predictions either moved or were absent.
+delete from public.fixtures
+where api_provider = 'legacy';
+
+-- Abort if prediction count changed.
+do $$
+declare
+  before_count bigint;
+  after_count bigint;
+begin
+  select prediction_count_before into before_count from migration_counts limit 1;
+  select count(*) into after_count from public.predictions;
+
+  if before_count <> after_count then
+    raise exception
+      'Prediction count changed during canonicalization: before %, after %',
+      before_count,
+      after_count;
+  end if;
+end $$;
+
+-- Abort if any legacy fixtures remain.
+do $$
+declare
+  legacy_fixture_count integer;
+begin
+  select count(*) into legacy_fixture_count
+  from public.fixtures
+  where api_provider = 'legacy';
+
+  if legacy_fixture_count > 0 then
+    raise exception 'Legacy fixtures remain after canonicalization: %', legacy_fixture_count;
+  end if;
+end $$;
+
+commit;
+
+-- ============================================================================
+-- AFTER VERIFICATION
+-- ============================================================================
+
+-- 1. Prediction count after migration.
+select count(*) as prediction_count_after
+from public.predictions;
+
+-- 2. Fixture counts by provider after migration. "legacy" should be absent.
+select
+  coalesce(api_provider, '<null>') as api_provider,
+  count(*) as fixture_count
+from public.fixtures
+group by 1
+order by 1;
+
+-- 3. Mapping report generated by the migration.
+select *
+from public.fixture_canonicalization_map
+order by migrated_at desc, kickoff_time_utc, home_team, away_team;
+
+-- 4. Must be zero: predictions still pointing to non-football-data fixtures.
+select count(*) as predictions_on_non_football_data_fixtures
+from public.predictions p
+join public.fixtures f
+  on f.id = p.fixture_id
+where f.api_provider <> 'football-data';
+
+-- 5. Duplicate match groups after migration. This should return zero rows for assigned teams.
+with duplicate_groups as (
+  select
+    coalesce(competition, 'FIFA World Cup 2026') as competition,
+    coalesce(stage, '') as stage,
+    team1_id,
+    team2_id,
+    coalesce(kickoff_time_utc, kickoff_at) as kickoff_time_utc,
+    count(*) as fixture_count,
+    array_agg(id order by api_provider, id) as fixture_ids,
+    array_agg(api_provider order by api_provider, id) as providers
+  from public.fixtures
+  where team1_id is not null
+    and team2_id is not null
+    and coalesce(kickoff_time_utc, kickoff_at) is not null
+  group by 1, 2, 3, 4, 5
+  having count(*) > 1
+)
+select *
+from duplicate_groups
+order by kickoff_time_utc, stage;
+
+-- 6. Sanity: Australia vs Turkey should have only one football-data fixture row.
 select
   f.id,
   f.api_provider,
@@ -325,21 +470,16 @@ group by f.id
 order by f.api_provider, f.id;
 
 -- ============================================================================
--- ROLLBACK PLAN
+-- ROLLBACK
 -- ============================================================================
 --
--- Preferred rollback: restore the database/project from the Supabase backup taken
--- immediately before running this migration.
+-- Preferred rollback:
+-- Restore the Supabase database backup taken immediately before this migration.
 --
--- Manual rollback is possible only for rows captured in fixture_canonicalization_backup,
--- but it is intentionally not automated here because re-splitting predictions back from
--- canonical fixtures can conflict with new user changes made after the migration.
+-- Emergency manual rollback:
+-- Use public.fixture_canonicalization_backup rows with:
+-- - backup_kind = 'predictions_table_before_football_data_canonicalization'
+-- - backup_kind = 'legacy_fixture_before_delete'
 --
--- If you must manually roll back immediately, before users make new predictions:
---
--- 1. Reinsert backed-up legacy fixture rows from backup_kind = 'legacy_fixture_before_delete'.
--- 2. Repoint backed-up legacy prediction rows to their old_fixture_id, resolving any
---    user_id/fixture_id conflicts manually.
--- 3. Re-run the AFTER VERIFICATION queries.
---
--- Keep public.fixture_canonicalization_backup until the app has been verified in production.
+-- Manual rollback is intentionally not automated because users may make new predictions
+-- after this migration. Restore from a database backup if anything looks wrong.
