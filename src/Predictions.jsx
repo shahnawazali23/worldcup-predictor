@@ -1,6 +1,12 @@
 import { useEffect, useMemo, useState } from 'react'
 import { savePrediction } from './data'
-import { buildFixtureDisplayMeta, fixtureMatchLabel, fixtureParticipant, hasAssignedTeams } from './fixtureDisplay'
+import {
+  buildFixtureDisplayMeta,
+  compareFixturesTournamentOrder,
+  fixtureMatchLabel,
+  fixtureParticipant,
+  hasAssignedTeams,
+} from './fixtureDisplay'
 import { possibleMainPickPoints, predictionPotential } from './predictionPreview'
 import { buildLeaderboard, isKnockoutFixture, remainingJokers, roundMultiplier, scoreMatch } from './scoring'
 import { fixtureKickoffDate, fixtureKickoffMs } from './time'
@@ -86,6 +92,8 @@ export default function Predictions({ active = true, data, onPredictionSaved, se
   const fixtureDisplayMeta = useMemo(() => buildFixtureDisplayMeta(data.fixtures), [data.fixtures])
   const visibleFixtures = data.fixtures
     .filter((fixture) => fixtureKickoffMs(fixture) > now)
+    .slice()
+    .sort(compareFixturesTournamentOrder)
   async function updatePrediction(fixture, updates) {
     const existing = predictionsByFixture[fixture.id]
     const kickoffMs = fixtureKickoffMs(fixture)

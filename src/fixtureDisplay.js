@@ -5,13 +5,7 @@ export function buildFixtureDisplayMeta(fixtures) {
   const orderedKnockoutFixtures = fixtures
     .filter((fixture) => normalizeStage(fixture.stage) !== 'group')
     .slice()
-    .sort((a, b) => {
-      const kickoffDiff = fixtureKickoffMs(a) - fixtureKickoffMs(b)
-      if (kickoffDiff !== 0) return kickoffDiff
-      return String(a.external_fixture_id || a.api_fixture_id || a.id).localeCompare(
-        String(b.external_fixture_id || b.api_fixture_id || b.id),
-      )
-    })
+    .sort(compareFixturesTournamentOrder)
 
   const stageCounts = {}
   const sequenceByFixtureId = {}
@@ -23,6 +17,18 @@ export function buildFixtureDisplayMeta(fixtures) {
   })
 
   return { sequenceByFixtureId }
+}
+
+export function compareFixturesTournamentOrder(a, b) {
+  const kickoffDiff = fixtureKickoffMs(a) - fixtureKickoffMs(b)
+  if (kickoffDiff !== 0) return kickoffDiff
+
+  const stageDiff = stageOrder(a) - stageOrder(b)
+  if (stageDiff !== 0) return stageDiff
+
+  return String(a.external_fixture_id || a.api_fixture_id || a.id).localeCompare(
+    String(b.external_fixture_id || b.api_fixture_id || b.id),
+  )
 }
 
 export function fixtureParticipant({ alignRight = false, fixture, side, teamsById, sequenceByFixtureId = {} }) {
@@ -99,4 +105,15 @@ function stageLabel(fixture) {
   if (stage === 'semi') return 'Semi Final'
   if (stage === 'final') return 'Final'
   return fixture.stage || 'Fixture'
+}
+
+function stageOrder(fixture) {
+  const stage = normalizeStage(fixture.stage)
+  if (stage === 'group') return 1
+  if (stage === 'r32') return 2
+  if (stage === 'r16') return 3
+  if (stage === 'qf') return 4
+  if (stage === 'semi') return 5
+  if (stage === 'final') return 6
+  return 99
 }

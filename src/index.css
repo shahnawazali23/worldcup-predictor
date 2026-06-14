@@ -2227,6 +2227,13 @@ select:disabled {
   font-weight: 950;
 }
 
+.fixture-stage-detail {
+  color: rgba(248, 250, 252, 0.82);
+  font-size: 0.78rem;
+  font-weight: 750;
+  margin: 0.15rem 0 0;
+}
+
 .fixture-head time,
 .fixture-foot span {
   color: rgba(248, 250, 252, 0.88);

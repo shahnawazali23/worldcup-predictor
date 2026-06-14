@@ -1,9 +1,11 @@
 import { memo, useMemo, useState } from 'react'
+import { buildFixtureDisplayMeta, compareFixturesTournamentOrder, fixtureParticipant } from './fixtureDisplay'
 import { isKnockoutFixture, scoreMatch } from './scoring'
 import { fixtureKickoffDate, fixtureKickoffMs } from './time'
 
 function History({ data, session }) {
   const [now] = useState(() => Date.now())
+  const fixtureDisplayMeta = useMemo(() => buildFixtureDisplayMeta(data.fixtures), [data.fixtures])
 
   const rows = useMemo(() => {
     const predictionsByFixture = Object.fromEntries(
@@ -13,7 +15,6 @@ function History({ data, session }) {
     )
 
     return data.fixtures
-      .filter((fixture) => fixture.team1_id && fixture.team2_id)
       .filter((fixture) => fixture.is_finished || fixtureKickoffMs(fixture) < now)
       .map((fixture) => {
         const prediction = predictionsByFixture[fixture.id]
@@ -27,7 +28,7 @@ function History({ data, session }) {
         }
       })
       .filter((row) => row.prediction)
-      .sort((a, b) => fixtureKickoffMs(b.fixture) - fixtureKickoffMs(a.fixture))
+      .sort((a, b) => compareFixturesTournamentOrder(b.fixture, a.fixture))
   }, [data, now, session.user.id])
 
   const summary = useMemo(() => buildHistorySummary(rows), [rows])
@@ -43,8 +44,19 @@ function History({ data, session }) {
 
       <div className="history-list">
         {rows.map(({ fixture, prediction, score }) => {
-          const team1 = data.teamsById[fixture.team1_id]
-          const team2 = data.teamsById[fixture.team2_id]
+          const team1 = fixtureParticipant({
+            fixture,
+            side: 'home',
+            teamsById: data.teamsById,
+            sequenceByFixtureId: fixtureDisplayMeta.sequenceByFixtureId,
+          })
+          const team2 = fixtureParticipant({
+            alignRight: true,
+            fixture,
+            side: 'away',
+            teamsById: data.teamsById,
+            sequenceByFixtureId: fixtureDisplayMeta.sequenceByFixtureId,
+          })
           const pickedTeamRecord = prediction.pick_is_draw
             ? null
             : data.teamsById[prediction.picked_team_id]
@@ -156,7 +168,7 @@ function TeamNameWithFlag({ alignRight = false, compact = false, team }) {
       compact ? 'history-team-name-compact' : '',
     ].filter(Boolean).join(' ')}>
       <TeamFlag team={team} />
-      <strong>{team?.name || 'TBD'}</strong>
+      <strong>{team?.name || 'Participant pending'}</strong>
     </span>
   )
 }
@@ -171,7 +183,7 @@ function TeamFlag({ team }) {
 
   return (
     <span className="flag-mark">
-      {flagValue || team?.short_name?.slice(0, 3) || 'TBD'}
+      {flagValue || team?.code?.slice(0, 6) || team?.short_name?.slice(0, 3) || 'TBD'}
     </span>
   )
 }
