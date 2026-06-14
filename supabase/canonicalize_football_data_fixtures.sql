@@ -57,6 +57,23 @@ as $$
   end
 $$;
 
+create or replace function pg_temp.fixture_team_key(team_name text)
+returns text
+language sql
+immutable
+as $$
+  select lower(regexp_replace(
+    translate(
+      coalesce(team_name, ''),
+      'ÁÀÂÄÃÅáàâäãåÉÈÊËéèêëÍÌÎÏíìîïÓÒÔÖÕØóòôöõøÚÙÛÜúùûüÇçÑñÝýÿ',
+      'AAAAAAaaaaaaEEEEeeeeIIIIiiiiOOOOOOooooooUUUUuuuuCcNnYyy'
+    ),
+    '[^a-zA-Z0-9]+',
+    '',
+    'g'
+  ))
+$$;
+
 -- 1. Prediction count before migration.
 select count(*) as prediction_count_before
 from public.predictions;
@@ -88,8 +105,13 @@ with fixture_map as (
     on fd.api_provider = 'football-data'
    and pg_temp.fixture_competition_key(fd.competition) = pg_temp.fixture_competition_key(legacy.competition)
    and pg_temp.fixture_stage_key(fd.stage) = pg_temp.fixture_stage_key(legacy.stage)
-   and fd.team1_id = legacy.team1_id
-   and fd.team2_id = legacy.team2_id
+   and (
+     (fd.team1_id = legacy.team1_id and fd.team2_id = legacy.team2_id)
+     or (
+       pg_temp.fixture_team_key(fd.home_team) = pg_temp.fixture_team_key(legacy.home_team)
+       and pg_temp.fixture_team_key(fd.away_team) = pg_temp.fixture_team_key(legacy.away_team)
+     )
+   )
    and coalesce(fd.kickoff_time_utc, fd.kickoff_at) = coalesce(legacy.kickoff_time_utc, legacy.kickoff_at)
   left join public.predictions p
     on p.fixture_id = legacy.id
@@ -119,8 +141,13 @@ with fixture_map as (
     on fd.api_provider = 'football-data'
    and pg_temp.fixture_competition_key(fd.competition) = pg_temp.fixture_competition_key(legacy.competition)
    and pg_temp.fixture_stage_key(fd.stage) = pg_temp.fixture_stage_key(legacy.stage)
-   and fd.team1_id = legacy.team1_id
-   and fd.team2_id = legacy.team2_id
+   and (
+     (fd.team1_id = legacy.team1_id and fd.team2_id = legacy.team2_id)
+     or (
+       pg_temp.fixture_team_key(fd.home_team) = pg_temp.fixture_team_key(legacy.home_team)
+       and pg_temp.fixture_team_key(fd.away_team) = pg_temp.fixture_team_key(legacy.away_team)
+     )
+   )
    and coalesce(fd.kickoff_time_utc, fd.kickoff_at) = coalesce(legacy.kickoff_time_utc, legacy.kickoff_at)
   where legacy.api_provider = 'legacy'
 )
@@ -166,6 +193,23 @@ as $$
   end
 $$;
 
+create or replace function pg_temp.fixture_team_key(team_name text)
+returns text
+language sql
+immutable
+as $$
+  select lower(regexp_replace(
+    translate(
+      coalesce(team_name, ''),
+      'ÁÀÂÄÃÅáàâäãåÉÈÊËéèêëÍÌÎÏíìîïÓÒÔÖÕØóòôöõøÚÙÛÜúùûüÇçÑñÝýÿ',
+      'AAAAAAaaaaaaEEEEeeeeIIIIiiiiOOOOOOooooooUUUUuuuuCcNnYyy'
+    ),
+    '[^a-zA-Z0-9]+',
+    '',
+    'g'
+  ))
+$$;
+
 with unmapped_legacy_fixtures as (
   select distinct
     legacy.id,
@@ -184,8 +228,13 @@ with unmapped_legacy_fixtures as (
     on fd.api_provider = 'football-data'
    and pg_temp.fixture_competition_key(fd.competition) = pg_temp.fixture_competition_key(legacy.competition)
    and pg_temp.fixture_stage_key(fd.stage) = pg_temp.fixture_stage_key(legacy.stage)
-   and fd.team1_id = legacy.team1_id
-   and fd.team2_id = legacy.team2_id
+   and (
+     (fd.team1_id = legacy.team1_id and fd.team2_id = legacy.team2_id)
+     or (
+       pg_temp.fixture_team_key(fd.home_team) = pg_temp.fixture_team_key(legacy.home_team)
+       and pg_temp.fixture_team_key(fd.away_team) = pg_temp.fixture_team_key(legacy.away_team)
+     )
+   )
    and coalesce(fd.kickoff_time_utc, fd.kickoff_at) = coalesce(legacy.kickoff_time_utc, legacy.kickoff_at)
   where legacy.api_provider = 'legacy'
     and fd.id is null
@@ -236,8 +285,13 @@ with fixture_map as (
     on fd.api_provider = 'football-data'
    and pg_temp.fixture_competition_key(fd.competition) = pg_temp.fixture_competition_key(legacy.competition)
    and pg_temp.fixture_stage_key(fd.stage) = pg_temp.fixture_stage_key(legacy.stage)
-   and fd.team1_id = legacy.team1_id
-   and fd.team2_id = legacy.team2_id
+   and (
+     (fd.team1_id = legacy.team1_id and fd.team2_id = legacy.team2_id)
+     or (
+       pg_temp.fixture_team_key(fd.home_team) = pg_temp.fixture_team_key(legacy.home_team)
+       and pg_temp.fixture_team_key(fd.away_team) = pg_temp.fixture_team_key(legacy.away_team)
+     )
+   )
    and coalesce(fd.kickoff_time_utc, fd.kickoff_at) = coalesce(legacy.kickoff_time_utc, legacy.kickoff_at)
   where legacy.api_provider = 'legacy'
 )
@@ -308,6 +362,23 @@ as $$
     when lower(competition) like '%world cup%' then 'world_cup'
     else lower(regexp_replace(competition, '[^a-zA-Z0-9]+', '_', 'g'))
   end
+$$;
+
+create or replace function pg_temp.fixture_team_key(team_name text)
+returns text
+language sql
+immutable
+as $$
+  select lower(regexp_replace(
+    translate(
+      coalesce(team_name, ''),
+      'ÁÀÂÄÃÅáàâäãåÉÈÊËéèêëÍÌÎÏíìîïÓÒÔÖÕØóòôöõøÚÙÛÜúùûüÇçÑñÝýÿ',
+      'AAAAAAaaaaaaEEEEeeeeIIIIiiiiOOOOOOooooooUUUUuuuuCcNnYyy'
+    ),
+    '[^a-zA-Z0-9]+',
+    '',
+    'g'
+  ))
 $$;
 
 begin;
@@ -388,8 +459,13 @@ left join public.fixtures fd
   on fd.api_provider = 'football-data'
  and pg_temp.fixture_competition_key(fd.competition) = pg_temp.fixture_competition_key(legacy.competition)
  and pg_temp.fixture_stage_key(fd.stage) = pg_temp.fixture_stage_key(legacy.stage)
- and fd.team1_id = legacy.team1_id
- and fd.team2_id = legacy.team2_id
+ and (
+   (fd.team1_id = legacy.team1_id and fd.team2_id = legacy.team2_id)
+   or (
+     pg_temp.fixture_team_key(fd.home_team) = pg_temp.fixture_team_key(legacy.home_team)
+     and pg_temp.fixture_team_key(fd.away_team) = pg_temp.fixture_team_key(legacy.away_team)
+   )
+ )
  and coalesce(fd.kickoff_time_utc, fd.kickoff_at) = coalesce(legacy.kickoff_time_utc, legacy.kickoff_at)
 where legacy.api_provider = 'legacy';
 
