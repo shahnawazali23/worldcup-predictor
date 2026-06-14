@@ -37,6 +37,13 @@ type NormalizedTeam = {
   fifa_rank: number
 }
 
+type SavedTeam = {
+  id: string
+  name: string | null
+  api_provider: string | null
+  api_team_id: string | null
+}
+
 type SyncConfig = {
   provider: string
   supabaseUrl: string
@@ -80,25 +87,7 @@ Deno.serve(async () => {
       footballDataHttpClient?.close?.()
     }
     const teams = uniqueTeams(matches, config.provider)
-
-    if (teams.length > 0) {
-      const { error: teamsError } = await supabase
-        .from('teams')
-        .upsert(teams, { onConflict: 'api_provider,api_team_id', ignoreDuplicates: true })
-
-      if (teamsError) throw new Error(`Supabase teams upsert failed: ${formatErrorMessage(teamsError)}`)
-    }
-
-    const { data: savedTeams, error: loadTeamsError } = await supabase
-      .from('teams')
-      .select('id, api_team_id')
-      .eq('api_provider', config.provider)
-
-    if (loadTeamsError) throw new Error(`Supabase teams lookup failed: ${formatErrorMessage(loadTeamsError)}`)
-
-    const teamIdsByApiId = Object.fromEntries(
-      (savedTeams || []).map((team) => [team.api_team_id, team.id]),
-    )
+    const teamIdsByApiId = await syncTeamsAndBuildLookup(supabase, teams, config.provider)
 
     const fixtures = matches.map((match) => normalizeFixture(match, teamIdsByApiId, config))
     const { error: fixturesError } = await supabase
@@ -320,6 +309,109 @@ function uniqueTeams(matches: FootballDataMatch[], provider: string): Normalized
   }
 
   return [...teamsByApiId.values()]
+}
+
+async function syncTeamsAndBuildLookup(
+  supabase: ReturnType<typeof createClient>,
+  teams: NormalizedTeam[],
+  provider: string,
+): Promise<Record<string, string>> {
+  if (teams.length === 0) return {}
+
+  const teamNames = [...new Set(teams.map((team) => team.name))]
+  const providerTeamIds = [...new Set(teams.map((team) => team.api_team_id))]
+
+  const { data: existingByName, error: existingByNameError } = await supabase
+    .from('teams')
+    .select('id, name, api_provider, api_team_id')
+    .in('name', teamNames)
+
+  if (existingByNameError) {
+    throw new Error(`Supabase teams name lookup failed: ${formatErrorMessage(existingByNameError)}`)
+  }
+
+  const { data: existingByProviderId, error: existingByProviderIdError } = await supabase
+    .from('teams')
+    .select('id, name, api_provider, api_team_id')
+    .eq('api_provider', provider)
+    .in('api_team_id', providerTeamIds)
+
+  if (existingByProviderIdError) {
+    throw new Error(`Supabase teams provider lookup failed: ${formatErrorMessage(existingByProviderIdError)}`)
+  }
+
+  const existingRows = [...(existingByName || []), ...(existingByProviderId || [])] as SavedTeam[]
+  const rowsByName = new Map(existingRows.filter((row) => row.name).map((row) => [row.name, row]))
+  const rowsByProviderId = new Map(
+    existingRows
+      .filter((row) => row.api_provider === provider && row.api_team_id)
+      .map((row) => [row.api_team_id, row]),
+  )
+
+  const teamsToInsert = teams.filter((team) => {
+    return !rowsByProviderId.has(team.api_team_id) && !rowsByName.has(team.name)
+  })
+
+  if (teamsToInsert.length > 0) {
+    const { error: teamsError } = await supabase
+      .from('teams')
+      .upsert(teamsToInsert, { onConflict: 'api_provider,api_team_id', ignoreDuplicates: true })
+
+    if (teamsError) throw new Error(`Supabase teams upsert failed: ${formatErrorMessage(teamsError)}`)
+  }
+
+  const { data: resolvedTeams, error: resolvedTeamsError } = await supabase
+    .from('teams')
+    .select('id, name, api_provider, api_team_id')
+    .in('name', teamNames)
+
+  if (resolvedTeamsError) {
+    throw new Error(`Supabase teams resolved lookup failed: ${formatErrorMessage(resolvedTeamsError)}`)
+  }
+
+  const { data: resolvedProviderTeams, error: resolvedProviderTeamsError } = await supabase
+    .from('teams')
+    .select('id, name, api_provider, api_team_id')
+    .eq('api_provider', provider)
+    .in('api_team_id', providerTeamIds)
+
+  if (resolvedProviderTeamsError) {
+    throw new Error(`Supabase teams resolved provider lookup failed: ${formatErrorMessage(resolvedProviderTeamsError)}`)
+  }
+
+  const resolvedRows = [...(resolvedTeams || []), ...(resolvedProviderTeams || [])] as SavedTeam[]
+  const resolvedByName = new Map(resolvedRows.filter((row) => row.name).map((row) => [row.name, row]))
+  const resolvedByProviderId = new Map(
+    resolvedRows
+      .filter((row) => row.api_provider === provider && row.api_team_id)
+      .map((row) => [row.api_team_id, row]),
+  )
+
+  const teamIdsByApiId: Record<string, string> = {}
+  const unresolvedTeams: string[] = []
+
+  for (const team of teams) {
+    const resolvedTeam = resolvedByProviderId.get(team.api_team_id) || resolvedByName.get(team.name)
+    if (resolvedTeam?.id) {
+      teamIdsByApiId[team.api_team_id] = resolvedTeam.id
+    } else {
+      unresolvedTeams.push(`${team.name} (${team.api_team_id})`)
+    }
+  }
+
+  if (unresolvedTeams.length > 0) {
+    console.warn('[sync-fixtures] some teams could not be resolved to database IDs', { unresolvedTeams })
+  }
+
+  console.log('[sync-fixtures] teams resolved', {
+    provider,
+    incomingTeams: teams.length,
+    insertedTeams: teamsToInsert.length,
+    reusedExistingTeams: teams.length - teamsToInsert.length,
+    unresolvedTeams: unresolvedTeams.length,
+  })
+
+  return teamIdsByApiId
 }
 
 function winnerTeamId(
