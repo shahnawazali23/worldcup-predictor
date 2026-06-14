@@ -169,7 +169,8 @@ function TeamNameWithFlag({ alignRight = false, compact = false, team }) {
       compact ? 'history-team-name-compact' : '',
     ].filter(Boolean).join(' ')}>
       <TeamFlag team={team} />
-      <strong>{team?.name || 'Participant pending'}</strong>
+      <strong>{team?.name || 'TBD'}</strong>
+      {team?.isPlaceholder && team.subtitle && !compact && <small>{team.subtitle}</small>}
     </span>
   )
 }
@@ -177,6 +178,8 @@ function TeamNameWithFlag({ alignRight = false, compact = false, team }) {
 function TeamFlag({ team }) {
   const flagValue = resolveTeamFlag(team)
   const flagIsImage = flagValue.startsWith('http') || flagValue.startsWith('/')
+
+  if (!flagValue && team?.isPlaceholder) return null
 
   if (flagIsImage) {
     return <img alt="" className="flag-mark flag-image" src={flagValue} />

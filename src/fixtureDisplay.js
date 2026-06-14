@@ -43,20 +43,23 @@ export function fixtureParticipant({ alignRight = false, fixture, side, teamsByI
       flag: team.flag || '',
       isPlaceholder: false,
       name: team.name,
+      subtitle: team.short_name || team.name,
     }
   }
 
   const storedLabel = side === 'home' ? fixture.home_team : fixture.away_team
   const storedCode = side === 'home' ? fixture.home_team_code : fixture.away_team_code
-  const name = canonicalTeamName(cleanPlaceholderLabel(storedLabel)) ||
+  const placeholder = isUnknownKnockoutParticipant(fixture, storedLabel)
+  const name = placeholder ? 'TBD' : canonicalTeamName(cleanPlaceholderLabel(storedLabel)) ||
     bracketParticipantLabel(fixture, side, sequenceByFixtureId)
 
   return {
     alignRight,
-    code: storedCode || placeholderCode(fixture, side),
-    flag: resolveTeamFlag({ code: storedCode, name, short_name: storedCode }),
+    code: placeholder ? 'TBD' : storedCode || placeholderCode(fixture, side),
+    flag: placeholder ? '' : resolveTeamFlag({ code: storedCode, name, short_name: storedCode }),
     isPlaceholder: true,
     name,
+    subtitle: placeholder ? 'Participants will be confirmed after group stage completion' : 'Participant pending',
   }
 }
 
@@ -90,8 +93,25 @@ function bracketParticipantLabel(fixture, side, sequenceByFixtureId) {
 function cleanPlaceholderLabel(label) {
   if (!label) return ''
   const value = String(label).trim()
-  if (!value || value.toLowerCase() === 'unknown team' || value.toLowerCase() === 'tbd') return ''
+  if (
+    !value ||
+    value.toLowerCase() === 'unknown team' ||
+    value.toLowerCase() === 'tbd' ||
+    isApiParticipantPlaceholder(value)
+  ) return ''
   return value
+}
+
+function isUnknownKnockoutParticipant(fixture, label) {
+  return isApiParticipantPlaceholder(label) || (
+    normalizeStage(fixture.stage) !== 'group' &&
+    (!fixture.team1_id || !fixture.team2_id)
+  )
+}
+
+function isApiParticipantPlaceholder(label) {
+  if (!label) return false
+  return /^(home|away)\s+.+\s+participant$/i.test(String(label).trim())
 }
 
 function placeholderCode(fixture, side) {

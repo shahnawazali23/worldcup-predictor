@@ -524,7 +524,7 @@ function TeamPick({ disabled, isPicked, onClick, points, team, upset }) {
       <span className="team-pick-flag">{flag}</span>
       <span className="team-pick-main">
         <strong>{team.name}</strong>
-        <small>{team.isPlaceholder ? 'Participant pending' : team.code}</small>
+        <small>{team.isPlaceholder ? team.subtitle : team.code}</small>
       </span>
       <span className="rank-badge">{team.isPlaceholder ? 'Bracket' : `FIFA #${team.fifa_rank ?? '-'}`}</span>
       <span className="team-pick-points">{formatPoints(points)}</span>
@@ -546,6 +546,8 @@ function ScoreTeamLabel({ alignRight = false, team }) {
 function TeamFlag({ team }) {
   const flagValue = resolveTeamFlag(team)
   const flagIsImage = flagValue.startsWith('http') || flagValue.startsWith('/')
+
+  if (!flagValue && team?.isPlaceholder) return null
 
   if (flagIsImage) {
     return <img alt="" className="flag-mark flag-image" src={flagValue} />

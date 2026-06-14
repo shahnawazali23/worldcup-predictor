@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import { saveFixtureResult, saveTeam } from './data'
+import { fixtureParticipant } from './fixtureDisplay'
 import { isKnockoutFixture } from './scoring'
 
 export default function Admin({ data, onRefresh }) {
@@ -117,8 +118,8 @@ export default function Admin({ data, onRefresh }) {
         <h3>Results</h3>
         <div className="result-list">
           {data.fixtures.map((fixture) => {
-            const team1 = data.teamsById[fixture.team1_id]
-            const team2 = data.teamsById[fixture.team2_id]
+            const team1 = fixtureParticipant({ fixture, side: 'home', teamsById: data.teamsById })
+            const team2 = fixtureParticipant({ fixture, side: 'away', teamsById: data.teamsById })
             const knockout = isKnockoutFixture(fixture)
 
             return (
@@ -129,7 +130,7 @@ export default function Admin({ data, onRefresh }) {
               >
                 <div>
                   <strong>
-                    {team1?.name || 'TBD'} vs {team2?.name || 'TBD'}
+                    {team1.name} vs {team2.name}
                   </strong>
                   <span>{fixture.stage}</span>
                 </div>
@@ -138,8 +139,8 @@ export default function Admin({ data, onRefresh }) {
                 {knockout && (
                   <select defaultValue={fixture.advancing_team_id || ''} name="advancing_team_id">
                     <option value="">Advancer</option>
-                    <option value={fixture.team1_id}>{team1?.name}</option>
-                    <option value={fixture.team2_id}>{team2?.name}</option>
+                    {fixture.team1_id && <option value={fixture.team1_id}>{team1.name}</option>}
+                    {fixture.team2_id && <option value={fixture.team2_id}>{team2.name}</option>}
                   </select>
                 )}
                 {knockout && (

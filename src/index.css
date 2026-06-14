@@ -566,6 +566,10 @@ select:disabled {
   font-size: 2.6rem;
 }
 
+.team-pick-flag:empty {
+  display: none;
+}
+
 .team-pick-points {
   padding: 5px 9px;
   border-radius: 999px;
@@ -1838,6 +1842,14 @@ select:disabled {
   color: inherit;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.history-team-name small {
+  max-width: 16rem;
+  color: #475569;
+  font-size: 0.68rem;
+  font-weight: 750;
+  line-height: 1.2;
 }
 
 .history-team-name-right {
