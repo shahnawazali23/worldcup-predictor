@@ -95,9 +95,13 @@ create table if not exists public.prediction_restore_backup (
   restored_at timestamptz not null default now(),
   reason text not null,
   user_id uuid not null,
-  prediction_id uuid,
+  prediction_id text,
   prediction_row jsonb
 );
+
+alter table public.prediction_restore_backup
+alter column prediction_id type text
+using prediction_id::text;
 
 insert into public.prediction_restore_backup (
   reason,
@@ -108,7 +112,7 @@ insert into public.prediction_restore_backup (
 select
   'bonito_restore_2026_06_14',
   p.user_id,
-  p.id,
+  p.id::text,
   to_jsonb(p)
 from public.predictions p
 join bonito_target_profile profile
@@ -211,6 +215,7 @@ set
   pick_is_draw = excluded.pick_is_draw,
   pred_goals_team1 = excluded.pred_goals_team1,
   pred_goals_team2 = excluded.pred_goals_team2,
+  joker_used = false,
   updated_at = now();
 
 alter table public.predictions enable trigger predictions_validate_write;
