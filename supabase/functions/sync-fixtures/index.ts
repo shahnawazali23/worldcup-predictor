@@ -335,22 +335,25 @@ function assertFixturesHaveResolvedTeams(
       const awayApiId = String(awayTeam.id || awayTeam.tla || awayTeam.name || '')
 
       return {
-        api_fixture_id: fixture.api_fixture_id,
-        home_team_name: homeTeam.name || null,
-        home_team_canonical_name: homeTeam.name ? canonicalTeamName(homeTeam.name) : null,
-        home_football_data_team_id: homeApiId || null,
-        home_resolved_database_team_id: teamIdsByApiId[homeApiId] || null,
-        away_team_name: awayTeam.name || null,
-        away_team_canonical_name: awayTeam.name ? canonicalTeamName(awayTeam.name) : null,
-        away_football_data_team_id: awayApiId || null,
-        away_resolved_database_team_id: teamIdsByApiId[awayApiId] || null,
+        apiFixtureId: fixture.api_fixture_id,
+        homeTeamName: homeTeam.name || null,
+        awayTeamName: awayTeam.name || null,
+        canonicalHomeName: homeTeam.name ? canonicalTeamName(homeTeam.name) : null,
+        canonicalAwayName: awayTeam.name ? canonicalTeamName(awayTeam.name) : null,
+        footballDataHomeId: homeApiId || null,
+        footballDataAwayId: awayApiId || null,
+        resolvedTeam1Id: teamIdsByApiId[homeApiId] || null,
+        resolvedTeam2Id: teamIdsByApiId[awayApiId] || null,
       }
     })
-    .filter((fixture) => !fixture.home_resolved_database_team_id || !fixture.away_resolved_database_team_id)
+    .filter((fixture) => !fixture.resolvedTeam1Id || !fixture.resolvedTeam2Id)
 
   if (unresolvedFixtures.length === 0) return
 
-  console.error('[sync-fixtures] fixtures with unresolved teams', { unresolvedFixtures })
+  console.error('[sync-fixtures] unresolved fixtures detail', JSON.stringify({
+    unresolvedFixtureCount: unresolvedFixtures.length,
+    unresolvedFixtures,
+  }))
   throw new Error(`Unable to resolve teams for ${unresolvedFixtures.length} fixtures. See function logs for team names and IDs.`)
 }
 
