@@ -1,6 +1,7 @@
 import { memo, useMemo, useState } from 'react'
 import { buildFixtureDisplayMeta, compareFixturesTournamentOrder, fixtureParticipant } from './fixtureDisplay'
 import { isKnockoutFixture, scoreMatch } from './scoring'
+import { resolveTeamFlag } from './teamFlags'
 import { fixtureKickoffDate, fixtureKickoffMs } from './time'
 
 function History({ data, session }) {
@@ -174,7 +175,7 @@ function TeamNameWithFlag({ alignRight = false, compact = false, team }) {
 }
 
 function TeamFlag({ team }) {
-  const flagValue = team?.flag || ''
+  const flagValue = resolveTeamFlag(team)
   const flagIsImage = flagValue.startsWith('http') || flagValue.startsWith('/')
 
   if (flagIsImage) {

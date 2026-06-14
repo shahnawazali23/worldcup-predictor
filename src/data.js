@@ -1,4 +1,5 @@
 import { supabase } from './supabaseClient'
+import { canonicalTeamName, resolveTeamFlag } from './teamFlags'
 
 const fixtureSelect = `
   id,
@@ -42,14 +43,24 @@ export async function loadLeagueData() {
       query.order('created_at', { ascending: false }).limit(5),
     ),
   ])
+  const normalizedTeams = teams.map(normalizeTeamDisplay)
 
   return {
     profiles,
-    teams,
-    teamsById: Object.fromEntries(teams.map((team) => [team.id, team])),
+    teams: normalizedTeams,
+    teamsById: Object.fromEntries(normalizedTeams.map((team) => [team.id, team])),
     fixtures: fixtures.map(normalizeFixtureResultFields),
     predictions,
     syncRuns,
+  }
+}
+
+function normalizeTeamDisplay(team) {
+  const name = canonicalTeamName(team.name)
+  return {
+    ...team,
+    flag: resolveTeamFlag({ ...team, name }),
+    name,
   }
 }
 

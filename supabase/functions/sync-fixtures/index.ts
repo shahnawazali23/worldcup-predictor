@@ -32,6 +32,7 @@ type FootballDataMatch = {
 type NormalizedTeam = {
   api_provider: string
   api_team_id: string
+  flag: string
   name: string
   source_name: string
   short_name: string
@@ -43,6 +44,8 @@ type SavedTeam = {
   name: string | null
   api_provider: string | null
   api_team_id: string | null
+  flag?: string | null
+  short_name?: string | null
 }
 
 type SkippedFixtureDebug = {
@@ -96,6 +99,117 @@ const FOOTBALL_DATA_TEAM_NAME_ALIASES: Record<string, string> = {
   'united states': 'USA',
   'united states of america': 'USA',
   usa: 'USA',
+}
+
+const TEAM_FLAG_BY_CANONICAL_NAME: Record<string, string> = {
+  Algeria: '🇩🇿',
+  Argentina: '🇦🇷',
+  Australia: '🇦🇺',
+  Austria: '🇦🇹',
+  Belgium: '🇧🇪',
+  'Bosnia and Herzegovina': '🇧🇦',
+  Brazil: '🇧🇷',
+  Canada: '🇨🇦',
+  'Cape Verde': '🇨🇻',
+  Colombia: '🇨🇴',
+  'Congo DR': '🇨🇩',
+  Croatia: '🇭🇷',
+  Curacao: '🇨🇼',
+  Czechia: '🇨🇿',
+  Ecuador: '🇪🇨',
+  Egypt: '🇪🇬',
+  England: '🏴',
+  France: '🇫🇷',
+  Germany: '🇩🇪',
+  Ghana: '🇬🇭',
+  Haiti: '🇭🇹',
+  Iran: '🇮🇷',
+  Iraq: '🇮🇶',
+  'Ivory Coast': '🇨🇮',
+  Japan: '🇯🇵',
+  Jordan: '🇯🇴',
+  Mexico: '🇲🇽',
+  Morocco: '🇲🇦',
+  Netherlands: '🇳🇱',
+  'New Zealand': '🇳🇿',
+  Norway: '🇳🇴',
+  Panama: '🇵🇦',
+  Paraguay: '🇵🇾',
+  Portugal: '🇵🇹',
+  Qatar: '🇶🇦',
+  'Saudi Arabia': '🇸🇦',
+  Scotland: '🏴',
+  Senegal: '🇸🇳',
+  'South Africa': '🇿🇦',
+  'South Korea': '🇰🇷',
+  Spain: '🇪🇸',
+  Sweden: '🇸🇪',
+  Switzerland: '🇨🇭',
+  Tunisia: '🇹🇳',
+  Turkey: '🇹🇷',
+  USA: '🇺🇸',
+  Uruguay: '🇺🇾',
+  Uzbekistan: '🇺🇿',
+}
+
+const TEAM_FLAG_BY_CODE: Record<string, string> = {
+  ALG: '🇩🇿',
+  ARG: '🇦🇷',
+  AUS: '🇦🇺',
+  AUT: '🇦🇹',
+  BEL: '🇧🇪',
+  BAH: '🇧🇦',
+  BIH: '🇧🇦',
+  BRA: '🇧🇷',
+  CAN: '🇨🇦',
+  CIV: '🇨🇮',
+  COD: '🇨🇩',
+  COL: '🇨🇴',
+  CPV: '🇨🇻',
+  CRO: '🇭🇷',
+  CUR: '🇨🇼',
+  CUW: '🇨🇼',
+  CV: '🇨🇻',
+  CZE: '🇨🇿',
+  ECU: '🇪🇨',
+  EGY: '🇪🇬',
+  ENG: '🏴',
+  ESP: '🇪🇸',
+  FRA: '🇫🇷',
+  GER: '🇩🇪',
+  GHA: '🇬🇭',
+  HAI: '🇭🇹',
+  IRN: '🇮🇷',
+  IRQ: '🇮🇶',
+  JAP: '🇯🇵',
+  JPN: '🇯🇵',
+  JOR: '🇯🇴',
+  KOR: '🇰🇷',
+  KSA: '🇸🇦',
+  MAR: '🇲🇦',
+  MEX: '🇲🇽',
+  MOR: '🇲🇦',
+  NED: '🇳🇱',
+  NET: '🇳🇱',
+  NOR: '🇳🇴',
+  NZL: '🇳🇿',
+  PAN: '🇵🇦',
+  PAR: '🇵🇾',
+  POR: '🇵🇹',
+  QAT: '🇶🇦',
+  RSA: '🇿🇦',
+  SAU: '🇸🇦',
+  SCO: '🏴',
+  SEN: '🇸🇳',
+  SPA: '🇪🇸',
+  SUI: '🇨🇭',
+  SWE: '🇸🇪',
+  SWI: '🇨🇭',
+  TUN: '🇹🇳',
+  TUR: '🇹🇷',
+  URU: '🇺🇾',
+  USA: '🇺🇸',
+  UZB: '🇺🇿',
 }
 
 Deno.serve(async () => {
@@ -443,6 +557,7 @@ function uniqueTeams(matches: FootballDataMatch[], provider: string): Normalized
       teamsByApiId.set(apiTeamId, {
         api_provider: provider,
         api_team_id: apiTeamId,
+        flag: flagForTeam(canonicalName, team.tla || team.shortName || ''),
         name: canonicalName,
         source_name: team.name,
         short_name: team.tla || team.shortName || team.name,
@@ -457,6 +572,10 @@ function uniqueTeams(matches: FootballDataMatch[], provider: string): Normalized
 function canonicalTeamName(name: string) {
   const normalizedName = normalizeTeamNameKey(name)
   return FOOTBALL_DATA_TEAM_NAME_ALIASES[normalizedName] || name
+}
+
+function flagForTeam(name: string, code: string) {
+  return TEAM_FLAG_BY_CANONICAL_NAME[name] || TEAM_FLAG_BY_CODE[String(code || '').toUpperCase()] || ''
 }
 
 function normalizeTeamNameKey(name: string) {
@@ -482,7 +601,7 @@ async function syncTeamsAndBuildLookup(
 
   const { data: existingByName, error: existingByNameError } = await supabase
     .from('teams')
-    .select('id, name, api_provider, api_team_id')
+    .select('id, name, api_provider, api_team_id, flag, short_name')
     .in('name', teamNames)
 
   if (existingByNameError) {
@@ -491,7 +610,7 @@ async function syncTeamsAndBuildLookup(
 
   const { data: existingByProviderId, error: existingByProviderIdError } = await supabase
     .from('teams')
-    .select('id, name, api_provider, api_team_id')
+    .select('id, name, api_provider, api_team_id, flag, short_name')
     .eq('api_provider', provider)
     .in('api_team_id', providerTeamIds)
 
@@ -530,6 +649,8 @@ async function syncTeamsAndBuildLookup(
       .update({
         api_provider: provider,
         api_team_id: team.api_team_id,
+        flag: existingTeam.flag || team.flag,
+        short_name: existingTeam.short_name || team.short_name,
       })
       .eq('id', existingTeam.id)
       .is('api_provider', null)
@@ -542,6 +663,27 @@ async function syncTeamsAndBuildLookup(
     providerMetadataAttached += 1
   }
 
+  let displayMetadataPatched = 0
+  for (const team of teams) {
+    const existingTeam = rowsByProviderId.get(team.api_team_id) || rowsByName.get(team.name)
+    if (!existingTeam?.id) continue
+    if (existingTeam.flag && existingTeam.short_name) continue
+
+    const { error: displayUpdateError } = await supabase
+      .from('teams')
+      .update({
+        flag: existingTeam.flag || team.flag,
+        short_name: existingTeam.short_name || team.short_name,
+      })
+      .eq('id', existingTeam.id)
+
+    if (displayUpdateError) {
+      throw new Error(`Supabase teams display metadata update failed: ${formatErrorMessage(displayUpdateError)}`)
+    }
+
+    displayMetadataPatched += 1
+  }
+
   if (teamsToInsert.length > 0) {
     const { error: teamsError } = await supabase
       .from('teams')
@@ -552,7 +694,7 @@ async function syncTeamsAndBuildLookup(
 
   const { data: resolvedTeams, error: resolvedTeamsError } = await supabase
     .from('teams')
-    .select('id, name, api_provider, api_team_id')
+    .select('id, name, api_provider, api_team_id, flag, short_name')
     .in('name', teamNames)
 
   if (resolvedTeamsError) {
@@ -561,7 +703,7 @@ async function syncTeamsAndBuildLookup(
 
   const { data: resolvedProviderTeams, error: resolvedProviderTeamsError } = await supabase
     .from('teams')
-    .select('id, name, api_provider, api_team_id')
+    .select('id, name, api_provider, api_team_id, flag, short_name')
     .eq('api_provider', provider)
     .in('api_team_id', providerTeamIds)
 
@@ -610,6 +752,7 @@ async function syncTeamsAndBuildLookup(
     provider,
     incomingTeams: teams.length,
     insertedTeams: teamsToInsert.length,
+    displayMetadataPatched,
     providerMetadataAttached,
     reusedExistingTeams: teams.length - teamsToInsert.length,
     unresolvedTeams: unresolvedTeams.length,

@@ -1,4 +1,5 @@
 import { normalizeStage } from './scoring'
+import { canonicalTeamName, resolveTeamFlag } from './teamFlags'
 import { fixtureKickoffMs } from './time'
 
 export function buildFixtureDisplayMeta(fixtures) {
@@ -47,12 +48,13 @@ export function fixtureParticipant({ alignRight = false, fixture, side, teamsByI
 
   const storedLabel = side === 'home' ? fixture.home_team : fixture.away_team
   const storedCode = side === 'home' ? fixture.home_team_code : fixture.away_team_code
-  const name = cleanPlaceholderLabel(storedLabel) || bracketParticipantLabel(fixture, side, sequenceByFixtureId)
+  const name = canonicalTeamName(cleanPlaceholderLabel(storedLabel)) ||
+    bracketParticipantLabel(fixture, side, sequenceByFixtureId)
 
   return {
     alignRight,
     code: storedCode || placeholderCode(fixture, side),
-    flag: '',
+    flag: resolveTeamFlag({ code: storedCode, name, short_name: storedCode }),
     isPlaceholder: true,
     name,
   }

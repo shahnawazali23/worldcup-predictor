@@ -9,6 +9,7 @@ import {
 } from './fixtureDisplay'
 import { possibleMainPickPoints, predictionPotential } from './predictionPreview'
 import { buildLeaderboard, isKnockoutFixture, remainingJokers, roundMultiplier, scoreMatch } from './scoring'
+import { resolveTeamFlag } from './teamFlags'
 import { fixtureKickoffDate, fixtureKickoffMs } from './time'
 
 function useNow(active = true) {
@@ -543,7 +544,7 @@ function ScoreTeamLabel({ alignRight = false, team }) {
 }
 
 function TeamFlag({ team }) {
-  const flagValue = team?.flag || ''
+  const flagValue = resolveTeamFlag(team)
   const flagIsImage = flagValue.startsWith('http') || flagValue.startsWith('/')
 
   if (flagIsImage) {
