@@ -47,9 +47,33 @@ export async function loadLeagueData() {
     profiles,
     teams,
     teamsById: Object.fromEntries(teams.map((team) => [team.id, team])),
-    fixtures,
+    fixtures: fixtures.map(normalizeFixtureResultFields),
     predictions,
     syncRuns,
+  }
+}
+
+function normalizeFixtureResultFields(fixture) {
+  const goalsTeam1 = fixture.goals_team1 ?? fixture.home_score ?? null
+  const goalsTeam2 = fixture.goals_team2 ?? fixture.away_score ?? null
+  const hasResult = goalsTeam1 != null && goalsTeam2 != null
+  const isDraw = hasResult ? goalsTeam1 === goalsTeam2 : fixture.is_draw
+  const winnerTeamId = fixture.winner_team_id || (
+    hasResult && !isDraw
+      ? goalsTeam1 > goalsTeam2
+        ? fixture.team1_id
+        : fixture.team2_id
+      : null
+  )
+
+  return {
+    ...fixture,
+    goals_team1: goalsTeam1,
+    goals_team2: goalsTeam2,
+    home_score: fixture.home_score ?? goalsTeam1,
+    away_score: fixture.away_score ?? goalsTeam2,
+    is_draw: isDraw,
+    winner_team_id: winnerTeamId,
   }
 }
 
