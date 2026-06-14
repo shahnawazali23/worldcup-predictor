@@ -43,12 +43,16 @@ export async function loadLeagueData() {
     ),
   ])
 
+  const normalizedFixtures = fixtures.map(normalizeFixtureResultFields)
+  const { fixtureIdAliases, fixtures: mergedFixtures } = mergeDuplicateFixtureRows(normalizedFixtures, predictions)
+  const mergedPredictions = mergePredictionsByFixtureAliases(predictions, fixtureIdAliases)
+
   return {
     profiles,
     teams,
     teamsById: Object.fromEntries(teams.map((team) => [team.id, team])),
-    fixtures: fixtures.map(normalizeFixtureResultFields),
-    predictions,
+    fixtures: mergedFixtures,
+    predictions: mergedPredictions,
     syncRuns,
   }
 }
@@ -75,6 +79,125 @@ function normalizeFixtureResultFields(fixture) {
     is_draw: isDraw,
     winner_team_id: winnerTeamId,
   }
+}
+
+function mergeDuplicateFixtureRows(fixtures, predictions) {
+  const predictionCounts = predictions.reduce((counts, prediction) => {
+    const fixtureId = String(prediction.fixture_id)
+    counts[fixtureId] = (counts[fixtureId] || 0) + 1
+    return counts
+  }, {})
+
+  const groups = new Map()
+  fixtures.forEach((fixture) => {
+    const key = duplicateFixtureKey(fixture)
+    if (!groups.has(key)) groups.set(key, [])
+    groups.get(key).push(fixture)
+  })
+
+  const fixtureIdAliases = {}
+  const mergedFixtures = []
+
+  groups.forEach((group) => {
+    if (group.length === 1) {
+      mergedFixtures.push(group[0])
+      return
+    }
+
+    const canonical = group.slice().sort((a, b) => compareCanonicalFixture(a, b, predictionCounts))[0]
+    const merged = group.reduce((current, fixture) => mergeFixtureResultFields(current, fixture), canonical)
+
+    group.forEach((fixture) => {
+      if (String(fixture.id) !== String(canonical.id)) {
+        fixtureIdAliases[String(fixture.id)] = canonical.id
+      }
+    })
+
+    mergedFixtures.push(merged)
+  })
+
+  return {
+    fixtureIdAliases,
+    fixtures: mergedFixtures.sort((a, b) => fixtureTimestamp(a) - fixtureTimestamp(b)),
+  }
+}
+
+function duplicateFixtureKey(fixture) {
+  if (!fixture.team1_id || !fixture.team2_id) return `fixture:${fixture.id}`
+  const kickoff = fixtureTimestamp(fixture)
+  if (!kickoff) return `fixture:${fixture.id}`
+  return [
+    'match',
+    fixture.team1_id,
+    fixture.team2_id,
+    new Date(kickoff).toISOString(),
+  ].join(':')
+}
+
+function compareCanonicalFixture(a, b, predictionCounts) {
+  return (
+    (predictionCounts[String(b.id)] || 0) - (predictionCounts[String(a.id)] || 0) ||
+    Number(hasFixtureResult(b)) - Number(hasFixtureResult(a)) ||
+    Number(b.api_provider === 'football-data') - Number(a.api_provider === 'football-data') ||
+    String(a.id).localeCompare(String(b.id))
+  )
+}
+
+function mergeFixtureResultFields(current, candidate) {
+  const currentHasResult = hasFixtureResult(current)
+  const candidateHasResult = hasFixtureResult(candidate)
+  const resultSource = !currentHasResult && candidateHasResult ? candidate : current
+
+  return normalizeFixtureResultFields({
+    ...current,
+    goals_team1: resultSource.goals_team1 ?? resultSource.home_score ?? current.goals_team1,
+    goals_team2: resultSource.goals_team2 ?? resultSource.away_score ?? current.goals_team2,
+    home_score: resultSource.home_score ?? resultSource.goals_team1 ?? current.home_score,
+    away_score: resultSource.away_score ?? resultSource.goals_team2 ?? current.away_score,
+    winner_team_id: resultSource.winner_team_id || current.winner_team_id,
+    advancing_team_id: resultSource.advancing_team_id || current.advancing_team_id,
+    is_draw: candidateHasResult ? resultSource.is_draw : current.is_draw,
+    is_finished: current.is_finished || candidate.is_finished,
+    result_confirmed: current.result_confirmed || candidate.result_confirmed,
+    status: candidate.is_finished ? candidate.status : current.status,
+    last_synced_at: latestTimestamp(current.last_synced_at, candidate.last_synced_at),
+  })
+}
+
+function mergePredictionsByFixtureAliases(predictions, fixtureIdAliases) {
+  const predictionsByUserFixture = new Map()
+
+  predictions.forEach((prediction) => {
+    const fixtureId = fixtureIdAliases[String(prediction.fixture_id)] || prediction.fixture_id
+    const normalizedPrediction = { ...prediction, fixture_id: fixtureId }
+    const key = `${normalizedPrediction.user_id}:${normalizedPrediction.fixture_id}`
+    const existing = predictionsByUserFixture.get(key)
+
+    if (!existing || predictionTimestamp(normalizedPrediction) >= predictionTimestamp(existing)) {
+      predictionsByUserFixture.set(key, normalizedPrediction)
+    }
+  })
+
+  return [...predictionsByUserFixture.values()]
+}
+
+function hasFixtureResult(fixture) {
+  return (fixture.goals_team1 ?? fixture.home_score) != null && (fixture.goals_team2 ?? fixture.away_score) != null
+}
+
+function fixtureTimestamp(fixture) {
+  const timestamp = Date.parse(fixture.kickoff_time_utc || fixture.kickoff_at || '')
+  return Number.isFinite(timestamp) ? timestamp : 0
+}
+
+function predictionTimestamp(prediction) {
+  return Date.parse(prediction.updated_at || prediction.created_at || '') || 0
+}
+
+function latestTimestamp(left, right) {
+  if (!left) return right
+  if (!right) return left
+  return Date.parse(left) >= Date.parse(right) ? left : right
 }
 
 export async function savePrediction({ fixture, prediction, session, updates }) {
