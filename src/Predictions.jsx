@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { savePrediction } from './data'
+import { buildFixtureDisplayMeta, fixtureMatchLabel, fixtureParticipant, hasAssignedTeams } from './fixtureDisplay'
 import { possibleMainPickPoints, predictionPotential } from './predictionPreview'
 import { buildLeaderboard, isKnockoutFixture, remainingJokers, roundMultiplier, scoreMatch } from './scoring'
 import { fixtureKickoffDate, fixtureKickoffMs } from './time'
@@ -82,8 +83,8 @@ export default function Predictions({ active = true, data, onPredictionSaved, se
     }
     return streak
   }, [data.fixtures, data.teamsById, userPredictions])
+  const fixtureDisplayMeta = useMemo(() => buildFixtureDisplayMeta(data.fixtures), [data.fixtures])
   const visibleFixtures = data.fixtures
-    .filter((fixture) => fixture.team1_id && fixture.team2_id)
     .filter((fixture) => fixtureKickoffMs(fixture) > now)
   async function updatePrediction(fixture, updates) {
     const existing = predictionsByFixture[fixture.id]
@@ -189,8 +190,21 @@ export default function Predictions({ active = true, data, onPredictionSaved, se
 
       <div className="fixtures-grid">
         {visibleFixtures.map((fixture, index) => {
-          const team1 = data.teamsById[fixture.team1_id]
-          const team2 = data.teamsById[fixture.team2_id]
+          const teamsAssigned = hasAssignedTeams(fixture)
+          const team1 = fixtureParticipant({
+            fixture,
+            side: 'home',
+            teamsById: data.teamsById,
+            sequenceByFixtureId: fixtureDisplayMeta.sequenceByFixtureId,
+          })
+          const team2 = fixtureParticipant({
+            alignRight: true,
+            fixture,
+            side: 'away',
+            teamsById: data.teamsById,
+            sequenceByFixtureId: fixtureDisplayMeta.sequenceByFixtureId,
+          })
+          const bracketLabel = fixtureMatchLabel(fixture, fixtureDisplayMeta.sequenceByFixtureId)
           const savedPrediction = predictionsByFixture[fixture.id] || {}
           const prediction = {
             ...savedPrediction,
@@ -203,11 +217,11 @@ export default function Predictions({ active = true, data, onPredictionSaved, se
           const locked = now >= lockMs
           const knockout = isKnockoutFixture(fixture)
           const pickedDraw = prediction.pick_is_draw
-          const pickedTeam1 = prediction.picked_team_id === fixture.team1_id
-          const pickedTeam2 = prediction.picked_team_id === fixture.team2_id
+          const pickedTeam1 = teamsAssigned && prediction.picked_team_id === fixture.team1_id
+          const pickedTeam2 = teamsAssigned && prediction.picked_team_id === fixture.team2_id
           const isFeatured = index === 0
-          const team1Points = possibleMainPickPoints(fixture, fixture.team1_id, data.teamsById)
-          const team2Points = possibleMainPickPoints(fixture, fixture.team2_id, data.teamsById)
+          const team1Points = teamsAssigned ? possibleMainPickPoints(fixture, fixture.team1_id, data.teamsById) : 0
+          const team2Points = teamsAssigned ? possibleMainPickPoints(fixture, fixture.team2_id, data.teamsById) : 0
           const drawPoints = possibleMainPickPoints(fixture, 'draw', data.teamsById)
           const potential = predictionPotential({ fixture, prediction, teamsById: data.teamsById })
 
@@ -217,9 +231,10 @@ export default function Predictions({ active = true, data, onPredictionSaved, se
                 <div>
                   {isFeatured && <p className="live-label">Next match</p>}
                   <p className="fixture-stage">
-                    {fixture.stage}
+                    {bracketLabel || fixture.stage}
                     {roundMultiplier(fixture) > 1 && ` x${roundMultiplier(fixture)}`}
                   </p>
+                  {bracketLabel && <p className="fixture-stage-detail">{fixture.stage}</p>}
                   <time>
                     {fixtureKickoffDate(fixture).toLocaleString(undefined, {
                       weekday: 'short',
@@ -242,7 +257,7 @@ export default function Predictions({ active = true, data, onPredictionSaved, se
                 <p className="section-label">Main pick</p>
                 <div className={knockout ? 'main-pick-row knockout-pick-row' : 'main-pick-row'}>
                 <TeamPick
-                  disabled={locked || savingFixtureId === fixture.id}
+                  disabled={!teamsAssigned || locked || savingFixtureId === fixture.id}
                   isPicked={pickedTeam1}
                   onClick={() =>
                     updatePrediction(fixture, {
@@ -258,7 +273,7 @@ export default function Predictions({ active = true, data, onPredictionSaved, se
                   {!knockout && (
                     <button
                       className={pickedDraw ? 'draw-pick picked' : 'draw-pick'}
-                      disabled={locked || savingFixtureId === fixture.id}
+                      disabled={!teamsAssigned || locked || savingFixtureId === fixture.id}
                       onClick={() =>
                         updatePrediction(fixture, {
                           picked_team_id: null,
@@ -273,7 +288,7 @@ export default function Predictions({ active = true, data, onPredictionSaved, se
                   )}
 
                 <TeamPick
-                  disabled={locked || savingFixtureId === fixture.id}
+                  disabled={!teamsAssigned || locked || savingFixtureId === fixture.id}
                   isPicked={pickedTeam2}
                   onClick={() =>
                     updatePrediction(fixture, {
@@ -297,8 +312,8 @@ export default function Predictions({ active = true, data, onPredictionSaved, se
                 <div className="scoreline-row">
                   <ScoreTeamLabel team={team1} />
                   <input
-                    aria-label={`${team1?.name || 'Team 1'} score`}
-                    disabled={locked || savingFixtureId === fixture.id}
+                    aria-label={`${team1.name} score`}
+                    disabled={!teamsAssigned || locked || savingFixtureId === fixture.id}
                     inputMode="numeric"
                     min="0"
                     onChange={(event) =>
@@ -313,8 +328,8 @@ export default function Predictions({ active = true, data, onPredictionSaved, se
                   />
                   <span className="score-separator">-</span>
                   <input
-                    aria-label={`${team2?.name || 'Team 2'} score`}
-                    disabled={locked || savingFixtureId === fixture.id}
+                    aria-label={`${team2.name} score`}
+                    disabled={!teamsAssigned || locked || savingFixtureId === fixture.id}
                     inputMode="numeric"
                     min="0"
                     onChange={(event) =>
@@ -350,7 +365,7 @@ export default function Predictions({ active = true, data, onPredictionSaved, se
 
                 {knockout && (
                   <select
-                    disabled={locked || savingFixtureId === fixture.id}
+                    disabled={!teamsAssigned || locked || savingFixtureId === fixture.id}
                     onChange={(event) =>
                       updatePrediction(fixture, {
                         penalty_call: event.target.value || null,
@@ -367,7 +382,7 @@ export default function Predictions({ active = true, data, onPredictionSaved, se
                 <button
                   aria-pressed={prediction.joker_used || false}
                   className={prediction.joker_used ? 'joker active' : 'joker'}
-                  disabled={locked || savingFixtureId === fixture.id}
+                  disabled={!teamsAssigned || locked || savingFixtureId === fixture.id}
                   onClick={() =>
                     updatePrediction(fixture, {
                       joker_used: !prediction.joker_used,
@@ -400,15 +415,17 @@ export default function Predictions({ active = true, data, onPredictionSaved, se
 
               <div className="fixture-foot">
                 <span>
-                  {fixture.venue || fixture.group_name || 'Fixture'} · locks 1 min before kickoff
+                  {teamsAssigned
+                    ? `${fixture.venue || fixture.group_name || 'Fixture'} · locks 1 min before kickoff`
+                    : `${fixture.venue || fixture.group_name || bracketLabel || 'Bracket fixture'} · teams pending`}
                 </span>
                 <strong>
                   {pickedDraw
                     ? 'Picked: Draw'
                     : pickedTeam1
-                      ? `Picked: ${team1?.name || 'TBD'}`
+                      ? `Picked: ${team1.name}`
                       : pickedTeam2
-                        ? `Picked: ${team2?.name || 'TBD'}`
+                        ? `Picked: ${team2.name}`
                         : 'No pick yet'}
                 </strong>
                 {savedFixtureId === fixture.id && <em className="saved-badge">Saved</em>}
@@ -497,10 +514,10 @@ function TeamPick({ disabled, isPicked, onClick, points, team, upset }) {
     >
       <span className="team-pick-flag">{flag}</span>
       <span className="team-pick-main">
-        <strong>{team?.name || 'TBD'}</strong>
-        <small>{team?.short_name || 'TBD'}</small>
+        <strong>{team.name}</strong>
+        <small>{team.isPlaceholder ? 'Participant pending' : team.code}</small>
       </span>
-      <span className="rank-badge">FIFA #{team?.fifa_rank ?? '-'}</span>
+      <span className="rank-badge">{team.isPlaceholder ? 'Bracket' : `FIFA #${team.fifa_rank ?? '-'}`}</span>
       <span className="team-pick-points">{formatPoints(points)}</span>
       {upset && <span className="upset-badge">Upset value</span>}
       {isPicked && <span className="selected-badge">Selected</span>}
@@ -512,7 +529,7 @@ function ScoreTeamLabel({ alignRight = false, team }) {
   return (
     <span className={alignRight ? 'score-team score-team-right' : 'score-team'}>
       <TeamFlag team={team} />
-      <strong>{team?.short_name || team?.name || 'TBD'}</strong>
+      <strong>{team.code || team.name}</strong>
     </span>
   )
 }
@@ -527,7 +544,7 @@ function TeamFlag({ team }) {
 
   return (
     <span className="flag-mark">
-      {flagValue || team?.short_name?.slice(0, 3) || 'TBD'}
+      {flagValue || team?.code?.slice(0, 6) || 'TBD'}
     </span>
   )
 }
