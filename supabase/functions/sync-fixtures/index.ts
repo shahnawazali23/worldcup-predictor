@@ -37,89 +37,232 @@ type NormalizedTeam = {
   fifa_rank: number
 }
 
-const provider = Deno.env.get('FIXTURE_PROVIDER') || 'football-data'
-const competitionCode = Deno.env.get('FOOTBALL_DATA_COMPETITION_CODE') || 'WC'
-const season = Deno.env.get('FOOTBALL_DATA_SEASON') || '2026'
+type SyncConfig = {
+  provider: string
+  supabaseUrl: string
+  serviceRoleKey: string
+  footballDataApiKey: string
+  competitionCode: string
+  season: string
+  requestTimeoutMs: number
+}
+
+const MAX_RETRIES = 3
+const BASE_BACKOFF_MS = 750
+const DEFAULT_REQUEST_TIMEOUT_MS = 15_000
 
 Deno.serve(async () => {
-  const supabaseUrl = requiredEnv('SUPABASE_URL')
-  const serviceRoleKey = requiredEnv('SUPABASE_SERVICE_ROLE_KEY')
-  const apiKey = requiredEnv('FOOTBALL_DATA_API_KEY')
-  const supabase = createClient(supabaseUrl, serviceRoleKey)
+  const startedAt = Date.now()
+  let supabase: ReturnType<typeof createClient> | null = null
+  let config: SyncConfig | null = null
 
   try {
-    const matches = await fetchFootballDataMatches(apiKey)
-    const teams = uniqueTeams(matches)
+    config = readConfig()
+    supabase = createClient(config.supabaseUrl, config.serviceRoleKey)
+    const footballDataHttpClient = createFootballDataHttpClient()
+
+    console.log('[sync-fixtures] starting sync', {
+      provider: config.provider,
+      competitionCode: config.competitionCode,
+      season: config.season,
+      requestTimeoutMs: config.requestTimeoutMs,
+      http2Disabled: Boolean(footballDataHttpClient),
+    })
+
+    if (config.provider !== 'football-data') {
+      throw new Error(`Unsupported FIXTURE_PROVIDER: ${config.provider}`)
+    }
+
+    let matches: FootballDataMatch[]
+    try {
+      matches = await fetchFootballDataMatches(config, footballDataHttpClient)
+    } finally {
+      footballDataHttpClient?.close?.()
+    }
+    const teams = uniqueTeams(matches, config.provider)
 
     if (teams.length > 0) {
       const { error: teamsError } = await supabase
         .from('teams')
         .upsert(teams, { onConflict: 'api_provider,api_team_id', ignoreDuplicates: true })
 
-      if (teamsError) throw teamsError
+      if (teamsError) throw new Error(`Supabase teams upsert failed: ${formatErrorMessage(teamsError)}`)
     }
 
     const { data: savedTeams, error: loadTeamsError } = await supabase
       .from('teams')
       .select('id, api_team_id')
-      .eq('api_provider', provider)
+      .eq('api_provider', config.provider)
 
-    if (loadTeamsError) throw loadTeamsError
+    if (loadTeamsError) throw new Error(`Supabase teams lookup failed: ${formatErrorMessage(loadTeamsError)}`)
 
     const teamIdsByApiId = Object.fromEntries(
       (savedTeams || []).map((team) => [team.api_team_id, team.id]),
     )
 
-    const fixtures = matches.map((match) => normalizeFixture(match, teamIdsByApiId))
+    const fixtures = matches.map((match) => normalizeFixture(match, teamIdsByApiId, config))
     const { error: fixturesError } = await supabase
       .from('fixtures')
       .upsert(fixtures, { onConflict: 'api_provider,external_fixture_id' })
 
-    if (fixturesError) throw fixturesError
+    if (fixturesError) throw new Error(`Supabase fixtures upsert failed: ${formatErrorMessage(fixturesError)}`)
 
-    await logSync(supabase, {
+    const importedResults = fixtures.filter((fixture) => fixture.is_finished).length
+    await safeLogSync(supabase, config.provider, {
       status: 'success',
       imported_fixtures: fixtures.length,
-      imported_results: fixtures.filter((fixture) => fixture.is_finished).length,
-      message: `Synced ${fixtures.length} ${competitionCode} fixtures for ${season}.`,
+      imported_results: importedResults,
+      message: `Synced ${fixtures.length} ${config.competitionCode} fixtures for ${config.season}.`,
     })
 
-    return jsonResponse({ ok: true, provider, competitionCode, season, fixtures: fixtures.length })
+    console.log('[sync-fixtures] sync complete', {
+      fixtures: fixtures.length,
+      results: importedResults,
+      durationMs: Date.now() - startedAt,
+    })
+
+    return jsonResponse({
+      ok: true,
+      provider: config.provider,
+      competitionCode: config.competitionCode,
+      season: config.season,
+      fixtures: fixtures.length,
+      results: importedResults,
+      durationMs: Date.now() - startedAt,
+    })
   } catch (error) {
-    await logSync(supabase, {
-      status: 'error',
-      imported_fixtures: 0,
-      imported_results: 0,
-      message: error instanceof Error ? error.message : String(error),
-    })
+    const serializedError = serializeError(error)
+    console.error('[sync-fixtures] sync failed', serializedError)
 
-    return jsonResponse(
-      { ok: false, provider, competitionCode, season, error: error instanceof Error ? error.message : String(error) },
-      500,
-    )
+    if (supabase && config) {
+      await safeLogSync(supabase, config.provider, {
+        status: 'error',
+        imported_fixtures: 0,
+        imported_results: 0,
+        message: serializedError.message,
+      })
+    }
+
+    // Return HTTP 200 for handled sync failures so Supabase manual tests show the structured
+    // error body instead of a generic Edge Function 500. The body still reports ok: false.
+    return jsonResponse({
+      ok: false,
+      provider: config?.provider || null,
+      competitionCode: config?.competitionCode || null,
+      season: config?.season || null,
+      error: serializedError.message,
+      details: serializedError,
+      durationMs: Date.now() - startedAt,
+    })
   }
 })
 
-async function fetchFootballDataMatches(apiKey: string): Promise<FootballDataMatch[]> {
-  const url = new URL(`https://api.football-data.org/v4/competitions/${competitionCode}/matches`)
-  url.searchParams.set('season', season)
+async function fetchFootballDataMatches(
+  config: SyncConfig,
+  httpClient: { close?: () => void } | null,
+): Promise<FootballDataMatch[]> {
+  const url = new URL(`https://api.football-data.org/v4/competitions/${config.competitionCode}/matches`)
+  url.searchParams.set('season', config.season)
 
-  const response = await fetch(url, {
-    headers: {
-      'X-Auth-Token': apiKey,
-    },
+  console.log('[sync-fixtures] football-data request config', {
+    competitionCode: config.competitionCode,
+    season: config.season,
+    url: url.toString(),
   })
 
-  if (!response.ok) {
-    const body = await response.text()
-    throw new Error(`football-data.org ${response.status}: ${body}`)
+  const payload = await fetchJsonWithRetry(url, {
+    headers: {
+      accept: 'application/json',
+      'X-Auth-Token': config.footballDataApiKey,
+    },
+    timeoutMs: config.requestTimeoutMs,
+    httpClient,
+  })
+
+  if (!Array.isArray(payload.matches)) {
+    throw new Error(`football-data.org response did not contain a matches array. Body: ${safeJson(payload)}`)
   }
 
-  const payload = await response.json()
-  return payload.matches || []
+  return payload.matches
 }
 
-function normalizeFixture(match: FootballDataMatch, teamIdsByApiId: Record<string, string>) {
+async function fetchJsonWithRetry(
+  url: URL,
+  options: { headers: HeadersInit; timeoutMs: number; httpClient: { close?: () => void } | null },
+): Promise<Record<string, unknown>> {
+  let lastError: unknown = null
+
+  for (let attempt = 1; attempt <= MAX_RETRIES; attempt += 1) {
+    try {
+      const response = await fetchWithTimeout(url, options)
+      const bodyText = await response.text()
+
+      console.log('[sync-fixtures] football-data response', {
+        attempt,
+        status: response.status,
+        statusText: response.statusText,
+      })
+
+      if (response.ok) {
+        return parseJsonResponse(bodyText)
+      }
+
+      const message = `football-data.org ${response.status} ${response.statusText}: ${truncate(bodyText, 1200)}`
+      if (!isRetryableStatus(response.status) || attempt === MAX_RETRIES) {
+        throw new Error(message)
+      }
+
+      lastError = new Error(message)
+    } catch (error) {
+      lastError = error
+      console.error('[sync-fixtures] football-data attempt failed', {
+        attempt,
+        error: serializeError(error),
+      })
+
+      if (attempt === MAX_RETRIES) break
+    }
+
+    const backoffMs = BASE_BACKOFF_MS * 2 ** (attempt - 1)
+    console.log('[sync-fixtures] retrying football-data request', {
+      nextAttempt: attempt + 1,
+      backoffMs,
+    })
+    await delay(backoffMs)
+  }
+
+  throw new Error(`football-data.org request failed after ${MAX_RETRIES} attempts: ${formatErrorMessage(lastError)}`)
+}
+
+async function fetchWithTimeout(
+  url: URL,
+  options: { headers: HeadersInit; timeoutMs: number; httpClient: { close?: () => void } | null },
+): Promise<Response> {
+  const controller = new AbortController()
+  const timeoutId = setTimeout(() => controller.abort('request timeout'), options.timeoutMs)
+  const init: RequestInit & { client?: unknown } = {
+    headers: options.headers,
+    signal: controller.signal,
+  }
+
+  if (options.httpClient) {
+    // Supabase Edge logs showed HTTP/2 transport failures against football-data.org.
+    // Deno's custom client lets us force HTTP/1.1 for this provider fetch.
+    init.client = options.httpClient
+  }
+
+  try {
+    return await fetch(url, init)
+  } finally {
+    clearTimeout(timeoutId)
+  }
+}
+
+function normalizeFixture(
+  match: FootballDataMatch,
+  teamIdsByApiId: Record<string, string>,
+  config: SyncConfig,
+) {
   const homeTeam = match.homeTeam || {}
   const awayTeam = match.awayTeam || {}
   const homeApiId = String(homeTeam.id || homeTeam.tla || homeTeam.name || '')
@@ -130,10 +273,10 @@ function normalizeFixture(match: FootballDataMatch, teamIdsByApiId: Record<strin
 
   // football-data.org returns utcDate as an ISO UTC instant. Store it unchanged as canonical UTC.
   return {
-    api_provider: provider,
+    api_provider: config.provider,
     api_fixture_id: String(match.id),
     external_fixture_id: String(match.id),
-    competition: match.competition?.name || competitionCode,
+    competition: match.competition?.name || config.competitionCode,
     stage: normalizeStage(match.stage),
     group_name: match.group || null,
     home_team: homeTeam.name || null,
@@ -153,12 +296,13 @@ function normalizeFixture(match: FootballDataMatch, teamIdsByApiId: Record<strin
     winner_team_id: winnerTeamId(homeScore, awayScore, teamIdsByApiId[homeApiId], teamIdsByApiId[awayApiId]),
     is_draw: homeScore != null && awayScore != null && homeScore === awayScore,
     is_finished: isFinished,
+    result_confirmed: isFinished,
     status: match.status || 'SCHEDULED',
     last_synced_at: new Date().toISOString(),
   }
 }
 
-function uniqueTeams(matches: FootballDataMatch[]): NormalizedTeam[] {
+function uniqueTeams(matches: FootballDataMatch[], provider: string): NormalizedTeam[] {
   const teamsByApiId = new Map<string, NormalizedTeam>()
 
   for (const match of matches) {
@@ -197,14 +341,40 @@ function normalizeStage(stage?: string | null) {
     .join(' ')
 }
 
-async function logSync(
+async function safeLogSync(
   supabase: ReturnType<typeof createClient>,
+  provider: string,
   run: { status: string; imported_fixtures: number; imported_results: number; message: string },
 ) {
-  await supabase.from('api_sync_runs').insert({
+  const { error } = await supabase.from('api_sync_runs').insert({
     provider,
     ...run,
   })
+
+  if (error) {
+    console.error('[sync-fixtures] failed to write api_sync_runs row', serializeError(error))
+  }
+}
+
+function createFootballDataHttpClient(): { close?: () => void } | null {
+  const denoWithHttpClient = Deno as unknown as {
+    createHttpClient?: (options: { http2: boolean }) => { close?: () => void }
+  }
+
+  if (!denoWithHttpClient.createHttpClient) return null
+  return denoWithHttpClient.createHttpClient({ http2: false })
+}
+
+function readConfig(): SyncConfig {
+  return {
+    provider: Deno.env.get('FIXTURE_PROVIDER') || 'football-data',
+    supabaseUrl: requiredEnv('SUPABASE_URL'),
+    serviceRoleKey: requiredEnv('SUPABASE_SERVICE_ROLE_KEY'),
+    footballDataApiKey: requiredEnv('FOOTBALL_DATA_API_KEY'),
+    competitionCode: requiredEnv('FOOTBALL_DATA_COMPETITION_CODE'),
+    season: requiredEnv('FOOTBALL_DATA_SEASON'),
+    requestTimeoutMs: numberEnv('FOOTBALL_DATA_TIMEOUT_MS', DEFAULT_REQUEST_TIMEOUT_MS),
+  }
 }
 
 function requiredEnv(name: string) {
@@ -213,8 +383,86 @@ function requiredEnv(name: string) {
   return value
 }
 
+function numberEnv(name: string, fallback: number) {
+  const raw = Deno.env.get(name)
+  if (!raw) return fallback
+  const value = Number(raw)
+  if (!Number.isFinite(value) || value <= 0) {
+    throw new Error(`Invalid numeric env var ${name}: ${raw}`)
+  }
+  return value
+}
+
+function parseJsonResponse(bodyText: string): Record<string, unknown> {
+  try {
+    return JSON.parse(bodyText)
+  } catch (error) {
+    throw new Error(`football-data.org returned invalid JSON: ${truncate(bodyText, 1200)}; ${formatErrorMessage(error)}`)
+  }
+}
+
+function isRetryableStatus(status: number) {
+  return status === 408 || status === 429 || status >= 500
+}
+
+function delay(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+function serializeError(error: unknown) {
+  if (error instanceof Error) {
+    return {
+      name: error.name,
+      message: error.message,
+      stack: error.stack,
+      cause: error.cause ? serializeError(error.cause) : undefined,
+    }
+  }
+
+  if (error && typeof error === 'object') {
+    const record = error as Record<string, unknown>
+    return {
+      name: String(record.name || 'ObjectError'),
+      message: formatErrorMessage(error),
+      code: record.code,
+      details: record.details,
+      hint: record.hint,
+      raw: safeJson(error),
+    }
+  }
+
+  return {
+    name: 'UnknownError',
+    message: String(error),
+  }
+}
+
+function formatErrorMessage(error: unknown) {
+  if (error instanceof Error) return error.message
+  if (error && typeof error === 'object') {
+    const record = error as Record<string, unknown>
+    const message = record.message || record.error_description || record.error
+    if (typeof message === 'string') return message
+    return safeJson(error)
+  }
+  return String(error)
+}
+
+function safeJson(value: unknown) {
+  try {
+    return JSON.stringify(value)
+  } catch (_error) {
+    return String(value)
+  }
+}
+
+function truncate(value: string, maxLength: number) {
+  if (value.length <= maxLength) return value
+  return `${value.slice(0, maxLength)}...`
+}
+
 function jsonResponse(body: unknown, status = 200) {
-  return new Response(JSON.stringify(body), {
+  return new Response(JSON.stringify(body, null, 2), {
     status,
     headers: {
       'content-type': 'application/json',
