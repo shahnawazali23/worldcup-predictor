@@ -1,10 +1,10 @@
--- One-time backfill: Bonito historical predictions.
+-- One-time restore: Bonito predictions.
 --
 -- User:
 -- - bonysayed@gmail.com
 --
 -- Purpose:
--- - Reattach/update Bonito's historical predictions after football-data fixtures became canonical.
+-- - Restore Bonito's 9 expected predictions after football-data fixtures became canonical.
 -- - Touches only the profile resolved from bonysayed@gmail.com.
 -- - Does not modify any other user's predictions.
 --
@@ -13,6 +13,25 @@
 --   predictions_validate_write while repairing the old rows.
 
 begin;
+
+create or replace function pg_temp.bonito_team_key(team_name text)
+returns text
+language sql
+immutable
+as $$
+  select regexp_replace(
+    lower(
+      translate(
+        coalesce(team_name, ''),
+        'ÁÀÂÄÃÅáàâäãåÉÈÊËéèêëÍÌÎÏíìîïÓÒÔÖÕØóòôöõøÚÙÛÜúùûüÇçÑñÝýÿ',
+        'AAAAAAaaaaaaEEEEeeeeIIIIiiiiOOOOOOooooooUUUUuuuuCcNnYyy'
+      )
+    ),
+    '[^a-z0-9]+',
+    '',
+    'g'
+  )
+$$;
 
 create temp table bonito_target_profile (
   user_id uuid primary key
@@ -68,7 +87,32 @@ values
   ('Qatar', 'Switzerland', 'Switzerland', false, null, null),
   ('Brazil', 'Morocco', 'Brazil', false, null, null),
   ('Haiti', 'Scotland', 'Scotland', false, null, null),
-  ('Australia', 'Turkey', null, true, null, null);
+  ('Australia', 'Turkey', null, true, null, null),
+  ('Germany', 'Curacao', 'Germany', false, null, null);
+
+create table if not exists public.prediction_restore_backup (
+  id bigserial primary key,
+  restored_at timestamptz not null default now(),
+  reason text not null,
+  user_id uuid not null,
+  prediction_id uuid,
+  prediction_row jsonb
+);
+
+insert into public.prediction_restore_backup (
+  reason,
+  user_id,
+  prediction_id,
+  prediction_row
+)
+select
+  'bonito_restore_2026_06_14',
+  p.user_id,
+  p.id,
+  to_jsonb(p)
+from public.predictions p
+join bonito_target_profile profile
+  on profile.user_id = p.user_id;
 
 create temp table bonito_resolved_predictions on commit drop as
 select
@@ -79,9 +123,10 @@ select
   picks.pick_team_name,
   case
     when picks.pick_is_draw then null
-    when t.id is not null then t.id
     when picks.pick_team_name = f.home_team then f.team1_id
     when picks.pick_team_name = f.away_team then f.team2_id
+    when picked_home.name = picks.pick_team_name then f.team1_id
+    when picked_away.name = picks.pick_team_name then f.team2_id
     else null
   end as picked_team_id,
   picks.pick_is_draw,
@@ -91,10 +136,12 @@ from bonito_backfill_picks picks
 cross join bonito_target_profile profile
 join public.fixtures f
   on f.api_provider = 'football-data'
- and f.home_team = picks.home_team
- and f.away_team = picks.away_team
-left join public.teams t
-  on t.name = picks.pick_team_name;
+ and pg_temp.bonito_team_key(f.home_team) = pg_temp.bonito_team_key(picks.home_team)
+ and pg_temp.bonito_team_key(f.away_team) = pg_temp.bonito_team_key(picks.away_team)
+left join public.teams picked_home
+  on picked_home.id = f.team1_id
+left join public.teams picked_away
+  on picked_away.id = f.team2_id;
 
 do $$
 declare
@@ -108,8 +155,8 @@ begin
     select 1
     from public.fixtures f
     where f.api_provider = 'football-data'
-      and f.home_team = picks.home_team
-      and f.away_team = picks.away_team
+      and pg_temp.bonito_team_key(f.home_team) = pg_temp.bonito_team_key(picks.home_team)
+      and pg_temp.bonito_team_key(f.away_team) = pg_temp.bonito_team_key(picks.away_team)
   );
 
   if missing_fixture_count > 0 then
@@ -128,6 +175,17 @@ begin
 end $$;
 
 alter table public.predictions disable trigger predictions_validate_write;
+
+-- Restore exactly the 9 expected rows for Bonito. Remove any other Bonito
+-- predictions, but do not touch other users.
+delete from public.predictions p
+using bonito_target_profile profile
+where p.user_id = profile.user_id
+  and not exists (
+    select 1
+    from bonito_resolved_predictions expected
+    where expected.fixture_id = p.fixture_id
+  );
 
 insert into public.predictions (
   user_id,
@@ -167,7 +225,8 @@ select
     else picked.name
   end as prediction,
   p.pred_goals_team1 as predicted_home_score,
-  p.pred_goals_team2 as predicted_away_score
+  p.pred_goals_team2 as predicted_away_score,
+  f.is_finished
 from public.predictions p
 join public.profiles profile
   on profile.id = p.user_id
@@ -185,5 +244,18 @@ where lower(profile.email) = lower('bonysayed@gmail.com')
     or (f.home_team = 'Brazil' and f.away_team = 'Morocco')
     or (f.home_team = 'Haiti' and f.away_team = 'Scotland')
     or (f.home_team = 'Australia' and f.away_team = 'Turkey')
+    or (f.home_team = 'Germany' and f.away_team in ('Curacao', 'Curaçao'))
   )
 order by f.kickoff_time_utc;
+
+-- Count verification. Expected: total_predictions = 9.
+select
+  count(*) as total_predictions,
+  count(*) filter (where f.is_finished) as finished_predictions,
+  count(*) filter (where not f.is_finished) as upcoming_predictions
+from public.predictions p
+join public.profiles profile
+  on profile.id = p.user_id
+join public.fixtures f
+  on f.id = p.fixture_id
+where lower(profile.email) = lower('bonysayed@gmail.com');
