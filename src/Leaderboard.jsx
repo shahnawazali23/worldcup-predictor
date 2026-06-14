@@ -1,5 +1,5 @@
 import { memo, useMemo } from 'react'
-import { buildLeaderboard, scoreMatch } from './scoring'
+import { buildLeaderboard, scoreMatch, winnerIdFromFixture } from './scoring'
 import { fixtureKickoffMs } from './time'
 
 function Leaderboard({ data, session }) {
@@ -101,6 +101,7 @@ export default memo(Leaderboard)
 function buildLeaderboardView(data, currentUserId) {
   const baseRows = buildLeaderboard(data)
   const fixturesById = Object.fromEntries(data.fixtures.map((fixture) => [fixture.id, fixture]))
+  logFinishedPredictionDebug(data, fixturesById)
   const now = Date.now()
   const analyticsByUser = Object.fromEntries(
     baseRows.map((row) => [
@@ -155,6 +156,43 @@ function buildLeaderboardView(data, currentUserId) {
     rows,
     summaryCards: buildSummaryCards(rows),
   }
+}
+
+function logFinishedPredictionDebug(data, fixturesById) {
+  const shouldLog = import.meta.env.DEV ||
+    (typeof window !== 'undefined' && window.localStorage?.getItem('debugLeaderboard') === '1')
+  if (!shouldLog) return
+
+  const profilesById = Object.fromEntries(data.profiles.map((profile) => [profile.id, profile]))
+  const debugRows = data.predictions
+    .map((prediction) => {
+      const fixture = fixturesById[prediction.fixture_id]
+      if (!fixture?.is_finished) return null
+
+      const score = scoreMatch(fixture, prediction, data.teamsById)
+      const actualWinnerId = winnerIdFromFixture(fixture)
+      const pickedTeam = prediction.pick_is_draw ? null : data.teamsById[prediction.picked_team_id]
+      const actualWinner = actualWinnerId === 'draw'
+        ? 'Draw'
+        : data.teamsById[actualWinnerId]?.name || actualWinnerId || 'No winner'
+
+      return {
+        fixtureId: fixture.id,
+        homeTeam: fixture.home_team,
+        awayTeam: fixture.away_team,
+        user: profilesById[prediction.user_id]?.email || profilesById[prediction.user_id]?.display_name || prediction.user_id,
+        prediction: prediction.pick_is_draw ? 'Draw' : pickedTeam?.name || prediction.picked_team_id || 'No pick',
+        pickedTeamId: prediction.picked_team_id,
+        actualWinner,
+        actualWinnerId,
+        pointsAwarded: score.total,
+        countedAsCorrect: score.correctPick,
+        countedAsWrong: Boolean((prediction.picked_team_id || prediction.pick_is_draw) && !score.correctPick),
+      }
+    })
+    .filter(Boolean)
+
+  console.table(debugRows)
 }
 
 function isPredictionVisibleForMetrics(prediction, fixture, currentUserId, now) {

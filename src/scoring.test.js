@@ -10,6 +10,9 @@ const teamsById = {
   favorite: { id: 'favorite', name: 'Favorite', fifa_rank: 5 },
   underdog: { id: 'underdog', name: 'Underdog', fifa_rank: 48 },
   close: { id: 'close', name: 'Close', fifa_rank: 16 },
+  usaLegacy: { id: 'usaLegacy', name: 'USA', fifa_rank: 17 },
+  usaFootballData: { id: 'usaFootballData', name: 'United States', fifa_rank: 999 },
+  paraguay: { id: 'paraguay', name: 'Paraguay', fifa_rank: 40 },
 }
 
 const groupFixture = {
@@ -49,6 +52,24 @@ assert.equal(
   }, teamsById).total,
   3,
 )
+
+const canonicalIdentityFixture = {
+  id: 'usa1',
+  stage: 'Group',
+  team1_id: 'usaFootballData',
+  team2_id: 'paraguay',
+  goals_team1: 4,
+  goals_team2: 1,
+  winner_team_id: 'usaFootballData',
+  is_draw: false,
+  is_finished: true,
+}
+
+assert.equal(
+  scoreMatch(canonicalIdentityFixture, { picked_team_id: 'usaLegacy' }, teamsById).correctPick,
+  true,
+)
+assert.equal(scoreMatch(canonicalIdentityFixture, { picked_team_id: 'usaLegacy' }, teamsById).total, 1)
 
 const finalFixture = {
   id: 'f1',

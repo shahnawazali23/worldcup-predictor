@@ -1,3 +1,5 @@
+import { canonicalTeamName } from './teamFlags.js'
+
 export const ROUND_MULTIPLIERS = {
   group: 1,
   r32: 1.5,
@@ -37,11 +39,17 @@ export function mainPickBasePoints(fixture, prediction, teamsById) {
   const winnerId = winnerIdFromFixture(fixture)
   const pickedId = prediction.pick_is_draw ? 'draw' : prediction.picked_team_id
 
-  if (!winnerId || !pickedId || pickedId !== winnerId) return 0
+  if (!winnerId || !pickedId) return 0
   if (pickedId === 'draw') return 1
+  if (winnerId === 'draw') return 0
 
   const pickedTeam = teamsById[pickedId]
-  const opponentId = pickedId === fixture.team1_id ? fixture.team2_id : fixture.team1_id
+  const winnerTeam = teamsById[winnerId]
+  if (!sameTeamIdentity(pickedTeam, winnerTeam)) return 0
+
+  const homeTeam = teamsById[fixture.team1_id]
+  const pickedIsHomeTeam = sameTeamIdentity(pickedTeam, homeTeam)
+  const opponentId = pickedIsHomeTeam ? fixture.team2_id : fixture.team1_id
   const opponent = teamsById[opponentId]
   if (!pickedTeam || !opponent) return 0
 
@@ -51,6 +59,12 @@ export function mainPickBasePoints(fixture, prediction, teamsById) {
   if (upsetGap >= 40) return 5
   if (upsetGap >= 15) return 3
   return 2
+}
+
+function sameTeamIdentity(left, right) {
+  if (!left || !right) return false
+  if (left.id != null && right.id != null && String(left.id) === String(right.id)) return true
+  return canonicalTeamName(left.name) === canonicalTeamName(right.name)
 }
 
 export function scorelineBonus(fixture, prediction) {
