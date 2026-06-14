@@ -137,6 +137,35 @@ order by p.user_id, p.fixture_id;
 -- 5. Diagnostic for any rows returned by query 4.
 -- This shows the legacy fixture details and the closest football-data candidates.
 -- Use this before adding any manual override; do not guess.
+create or replace function pg_temp.fixture_stage_key(stage text)
+returns text
+language sql
+immutable
+as $$
+  select case
+    when stage is null or btrim(stage) = '' then 'unknown'
+    when lower(stage) in ('group', 'group stage', 'group_stage', 'regular season') then 'group'
+    when lower(stage) in ('last_16', 'last 16', 'round of 16', 'round_of_16') then 'round_of_16'
+    when lower(stage) in ('quarter_finals', 'quarter finals', 'quarter-final', 'quarter final', 'quarterfinals') then 'quarter_finals'
+    when lower(stage) in ('semi_finals', 'semi finals', 'semi-final', 'semi final', 'semifinals') then 'semi_finals'
+    when lower(stage) in ('third_place', 'third place', 'third place play-off', 'third-place play-off') then 'third_place'
+    when lower(stage) in ('final', 'finals') then 'final'
+    else lower(regexp_replace(stage, '[^a-zA-Z0-9]+', '_', 'g'))
+  end
+$$;
+
+create or replace function pg_temp.fixture_competition_key(competition text)
+returns text
+language sql
+immutable
+as $$
+  select case
+    when competition is null or btrim(competition) = '' then 'unknown'
+    when lower(competition) like '%world cup%' then 'world_cup'
+    else lower(regexp_replace(competition, '[^a-zA-Z0-9]+', '_', 'g'))
+  end
+$$;
+
 with unmapped_legacy_fixtures as (
   select distinct
     legacy.id,
