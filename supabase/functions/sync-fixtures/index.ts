@@ -45,6 +45,18 @@ type SavedTeam = {
   api_team_id: string | null
 }
 
+type UnresolvedFixtureDebug = {
+  apiFixtureId: string
+  homeTeamName: string | null
+  awayTeamName: string | null
+  canonicalHomeName: string | null
+  canonicalAwayName: string | null
+  footballDataHomeId: string | null
+  footballDataAwayId: string | null
+  resolvedTeam1Id: string | null
+  resolvedTeam2Id: string | null
+}
+
 type SyncConfig = {
   provider: string
   supabaseUrl: string
@@ -83,6 +95,16 @@ const FOOTBALL_DATA_TEAM_NAME_ALIASES: Record<string, string> = {
   'united states': 'USA',
   'united states of america': 'USA',
   usa: 'USA',
+}
+
+class UnresolvedFixturesError extends Error {
+  unresolvedFixtures: UnresolvedFixtureDebug[]
+
+  constructor(unresolvedFixtures: UnresolvedFixtureDebug[]) {
+    super(`Unable to resolve teams for ${unresolvedFixtures.length} fixtures.`)
+    this.name = 'UnresolvedFixturesError'
+    this.unresolvedFixtures = unresolvedFixtures
+  }
 }
 
 Deno.serve(async () => {
@@ -168,6 +190,12 @@ Deno.serve(async () => {
       competitionCode: config?.competitionCode || null,
       season: config?.season || null,
       error: serializedError.message,
+      ...(error instanceof UnresolvedFixturesError
+        ? {
+          unresolvedFixtureCount: error.unresolvedFixtures.length,
+          unresolvedFixtures: error.unresolvedFixtures,
+        }
+        : {}),
       details: serializedError,
       durationMs: Date.now() - startedAt,
     })
@@ -326,7 +354,7 @@ function assertFixturesHaveResolvedTeams(
   fixtures: ReturnType<typeof normalizeFixture>[],
   teamIdsByApiId: Record<string, string>,
 ) {
-  const unresolvedFixtures = fixtures
+  const unresolvedFixtures: UnresolvedFixtureDebug[] = fixtures
     .map((fixture, index) => {
       const match = matches[index]
       const homeTeam = match.homeTeam || {}
@@ -354,7 +382,7 @@ function assertFixturesHaveResolvedTeams(
     unresolvedFixtureCount: unresolvedFixtures.length,
     unresolvedFixtures,
   }))
-  throw new Error(`Unable to resolve teams for ${unresolvedFixtures.length} fixtures. See function logs for team names and IDs.`)
+  throw new UnresolvedFixturesError(unresolvedFixtures)
 }
 
 function parseKickoffInstant(utcDate: string) {
