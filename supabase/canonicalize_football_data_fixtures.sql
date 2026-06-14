@@ -418,40 +418,16 @@ insert into migration_counts (prediction_count_before)
 select count(*)
 from public.predictions;
 
-create temp table fixture_map (
-  old_fixture_id public.fixtures.id%type primary key,
-  new_fixture_id public.fixtures.id%type,
-  old_provider text,
-  old_api_fixture_id text,
-  new_api_fixture_id text,
-  home_team text,
-  away_team text,
-  kickoff_time_utc timestamptz,
-  stage text,
-  competition text
-) on commit drop;
-
-insert into fixture_map (
-  old_fixture_id,
-  new_fixture_id,
-  old_provider,
-  old_api_fixture_id,
-  new_api_fixture_id,
-  home_team,
-  away_team,
-  kickoff_time_utc,
-  stage,
-  competition
-)
+create temp table fixture_map on commit drop as
 select
-  legacy.id,
-  fd.id,
-  legacy.api_provider,
-  legacy.api_fixture_id,
-  fd.api_fixture_id,
+  legacy.id as old_fixture_id,
+  fd.id as new_fixture_id,
+  legacy.api_provider as old_provider,
+  legacy.api_fixture_id as old_api_fixture_id,
+  fd.api_fixture_id as new_api_fixture_id,
   legacy.home_team,
   legacy.away_team,
-  coalesce(fd.kickoff_time_utc, fd.kickoff_at),
+  coalesce(fd.kickoff_time_utc, fd.kickoff_at) as kickoff_time_utc,
   legacy.stage,
   legacy.competition
 from public.fixtures legacy
