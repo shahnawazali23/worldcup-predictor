@@ -1,7 +1,7 @@
 import { memo, useMemo, useState } from 'react'
 import { buildFixtureDisplayMeta, compareFixturesTournamentOrder, fixtureParticipant } from './fixtureDisplay'
 import { isKnockoutFixture, scoreMatch } from './scoring'
-import { resolveTeamFlag } from './teamFlags'
+import TeamFlag from './TeamFlag'
 import { fixtureKickoffDate, fixtureKickoffMs } from './time'
 
 function History({ data, session }) {
@@ -95,7 +95,7 @@ function History({ data, session }) {
                     <small>Your Prediction</small>
                     {prediction.pick_is_draw ? (
                       <span className="history-team-name">
-                        <span className="flag-mark">DRAW</span>
+                        <span className="draw-prediction-mark">DRAW</span>
                         <strong>Draw</strong>
                       </span>
                     ) : pickedTeamRecord ? (
@@ -168,26 +168,9 @@ function TeamNameWithFlag({ alignRight = false, compact = false, team }) {
       alignRight ? 'history-team-name-right' : '',
       compact ? 'history-team-name-compact' : '',
     ].filter(Boolean).join(' ')}>
-      <TeamFlag team={team} />
+      <TeamFlag size={compact ? 'compact' : 'table'} team={team} />
       <strong>{team?.name || 'TBD'}</strong>
       {team?.isPlaceholder && team.subtitle && !compact && <small>{team.subtitle}</small>}
-    </span>
-  )
-}
-
-function TeamFlag({ team }) {
-  const flagValue = resolveTeamFlag(team)
-  const flagIsImage = flagValue.startsWith('http') || flagValue.startsWith('/')
-
-  if (!flagValue && team?.isPlaceholder) return null
-
-  if (flagIsImage) {
-    return <img alt="" className="flag-mark flag-image" src={flagValue} />
-  }
-
-  return (
-    <span className="flag-mark">
-      {flagValue || team?.code?.slice(0, 6) || team?.short_name?.slice(0, 3) || 'TBD'}
     </span>
   )
 }

@@ -2568,3 +2568,75 @@ select:disabled {
     flex-direction: column;
   }
 }
+
+/* SVG country flags */
+.flag-mark {
+  width: 24px;
+  min-width: 24px;
+  height: 24px;
+  min-height: 24px;
+  border-radius: 4px;
+  box-shadow: 0 0 0 1px rgba(15, 23, 42, 0.12);
+  overflow: hidden;
+}
+
+.flag-mark-fixture {
+  width: 32px;
+  min-width: 32px;
+  height: 32px;
+  min-height: 32px;
+}
+
+.flag-mark-table {
+  width: 24px;
+  min-width: 24px;
+  height: 24px;
+  min-height: 24px;
+}
+
+.flag-mark-compact {
+  width: 20px;
+  min-width: 20px;
+  height: 20px;
+  min-height: 20px;
+}
+
+.flag-image {
+  display: inline-block;
+  object-fit: cover;
+  object-position: center;
+  background: #ffffff;
+}
+
+.team-pick-flag .flag-mark {
+  width: 32px;
+  min-width: 32px;
+  height: 32px;
+  min-height: 32px;
+  font-size: 0.72rem;
+}
+
+.history-team-name .flag-mark,
+.score-team .flag-mark {
+  font-size: 0.65rem;
+}
+
+.flag-fallback,
+.draw-prediction-mark {
+  display: inline-grid;
+  place-items: center;
+  color: #334155;
+  background: #e5e7eb;
+  font-size: 0.58rem;
+  font-weight: 900;
+  line-height: 1;
+  letter-spacing: 0.02em;
+}
+
+.draw-prediction-mark {
+  width: auto;
+  min-width: 34px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 999px;
+}

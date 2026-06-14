@@ -1,114 +1,116 @@
-const FLAG_BY_CANONICAL_NAME = {
-  Algeria: '🇩🇿',
-  Argentina: '🇦🇷',
-  Australia: '🇦🇺',
-  Austria: '🇦🇹',
-  Belgium: '🇧🇪',
-  'Bosnia and Herzegovina': '🇧🇦',
-  Brazil: '🇧🇷',
-  Canada: '🇨🇦',
-  'Cape Verde': '🇨🇻',
-  Colombia: '🇨🇴',
-  'Congo DR': '🇨🇩',
-  Croatia: '🇭🇷',
-  Curacao: '🇨🇼',
-  Czechia: '🇨🇿',
-  Ecuador: '🇪🇨',
-  Egypt: '🇪🇬',
-  England: '🏴',
-  France: '🇫🇷',
-  Germany: '🇩🇪',
-  Ghana: '🇬🇭',
-  Haiti: '🇭🇹',
-  Iran: '🇮🇷',
-  Iraq: '🇮🇶',
-  'Ivory Coast': '🇨🇮',
-  Japan: '🇯🇵',
-  Jordan: '🇯🇴',
-  Mexico: '🇲🇽',
-  Morocco: '🇲🇦',
-  Netherlands: '🇳🇱',
-  'New Zealand': '🇳🇿',
-  Norway: '🇳🇴',
-  Panama: '🇵🇦',
-  Paraguay: '🇵🇾',
-  Portugal: '🇵🇹',
-  Qatar: '🇶🇦',
-  'Saudi Arabia': '🇸🇦',
-  Scotland: '🏴',
-  Senegal: '🇸🇳',
-  'South Africa': '🇿🇦',
-  'South Korea': '🇰🇷',
-  Spain: '🇪🇸',
-  Sweden: '🇸🇪',
-  Switzerland: '🇨🇭',
-  Tunisia: '🇹🇳',
-  Turkey: '🇹🇷',
-  USA: '🇺🇸',
-  Uruguay: '🇺🇾',
-  Uzbekistan: '🇺🇿',
+const FLAG_ASSET_BASE_URL = 'https://flagcdn.com'
+
+const ISO_BY_CANONICAL_NAME = {
+  Algeria: 'dz',
+  Argentina: 'ar',
+  Australia: 'au',
+  Austria: 'at',
+  Belgium: 'be',
+  'Bosnia and Herzegovina': 'ba',
+  Brazil: 'br',
+  Canada: 'ca',
+  'Cape Verde': 'cv',
+  Colombia: 'co',
+  'Congo DR': 'cd',
+  Croatia: 'hr',
+  Curacao: 'cw',
+  Czechia: 'cz',
+  Ecuador: 'ec',
+  Egypt: 'eg',
+  England: 'gb-eng',
+  France: 'fr',
+  Germany: 'de',
+  Ghana: 'gh',
+  Haiti: 'ht',
+  Iran: 'ir',
+  Iraq: 'iq',
+  'Ivory Coast': 'ci',
+  Japan: 'jp',
+  Jordan: 'jo',
+  Mexico: 'mx',
+  Morocco: 'ma',
+  Netherlands: 'nl',
+  'New Zealand': 'nz',
+  Norway: 'no',
+  Panama: 'pa',
+  Paraguay: 'py',
+  Portugal: 'pt',
+  Qatar: 'qa',
+  'Saudi Arabia': 'sa',
+  Scotland: 'gb-sct',
+  Senegal: 'sn',
+  'South Africa': 'za',
+  'South Korea': 'kr',
+  Spain: 'es',
+  Sweden: 'se',
+  Switzerland: 'ch',
+  Tunisia: 'tn',
+  Turkey: 'tr',
+  USA: 'us',
+  Uruguay: 'uy',
+  Uzbekistan: 'uz',
 }
 
-const FLAG_BY_CODE = {
-  ALG: '🇩🇿',
-  ARG: '🇦🇷',
-  AUS: '🇦🇺',
-  AUT: '🇦🇹',
-  BEL: '🇧🇪',
-  BIH: '🇧🇦',
-  BAH: '🇧🇦',
-  BRA: '🇧🇷',
-  CAN: '🇨🇦',
-  CIV: '🇨🇮',
-  COD: '🇨🇩',
-  COL: '🇨🇴',
-  CPV: '🇨🇻',
-  CRO: '🇭🇷',
-  CUR: '🇨🇼',
-  CUW: '🇨🇼',
-  CV: '🇨🇻',
-  CZE: '🇨🇿',
-  DEN: '🇩🇰',
-  ECU: '🇪🇨',
-  EGY: '🇪🇬',
-  ENG: '🏴',
-  FRA: '🇫🇷',
-  GER: '🇩🇪',
-  GHA: '🇬🇭',
-  HAI: '🇭🇹',
-  IRN: '🇮🇷',
-  IRQ: '🇮🇶',
-  JPN: '🇯🇵',
-  JAP: '🇯🇵',
-  JOR: '🇯🇴',
-  KOR: '🇰🇷',
-  MEX: '🇲🇽',
-  MAR: '🇲🇦',
-  MOR: '🇲🇦',
-  NED: '🇳🇱',
-  NET: '🇳🇱',
-  NOR: '🇳🇴',
-  NZL: '🇳🇿',
-  PAN: '🇵🇦',
-  PAR: '🇵🇾',
-  POR: '🇵🇹',
-  QAT: '🇶🇦',
-  KSA: '🇸🇦',
-  SAU: '🇸🇦',
-  SCO: '🏴',
-  SEN: '🇸🇳',
-  RSA: '🇿🇦',
-  KORR: '🇰🇷',
-  ESP: '🇪🇸',
-  SPA: '🇪🇸',
-  SWE: '🇸🇪',
-  SUI: '🇨🇭',
-  SWI: '🇨🇭',
-  TUN: '🇹🇳',
-  TUR: '🇹🇷',
-  USA: '🇺🇸',
-  URU: '🇺🇾',
-  UZB: '🇺🇿',
+const ISO_BY_CODE = {
+  ALG: 'dz',
+  ARG: 'ar',
+  AUS: 'au',
+  AUT: 'at',
+  BEL: 'be',
+  BIH: 'ba',
+  BAH: 'ba',
+  BRA: 'br',
+  CAN: 'ca',
+  CIV: 'ci',
+  COD: 'cd',
+  COL: 'co',
+  CPV: 'cv',
+  CRO: 'hr',
+  CUR: 'cw',
+  CUW: 'cw',
+  CV: 'cv',
+  CZE: 'cz',
+  DEN: 'dk',
+  ECU: 'ec',
+  EGY: 'eg',
+  ENG: 'gb-eng',
+  FRA: 'fr',
+  GER: 'de',
+  GHA: 'gh',
+  HAI: 'ht',
+  IRN: 'ir',
+  IRQ: 'iq',
+  JPN: 'jp',
+  JAP: 'jp',
+  JOR: 'jo',
+  KOR: 'kr',
+  KORR: 'kr',
+  MAR: 'ma',
+  MEX: 'mx',
+  MOR: 'ma',
+  NED: 'nl',
+  NET: 'nl',
+  NOR: 'no',
+  NZL: 'nz',
+  PAN: 'pa',
+  PAR: 'py',
+  POR: 'pt',
+  QAT: 'qa',
+  KSA: 'sa',
+  SAU: 'sa',
+  SCO: 'gb-sct',
+  SEN: 'sn',
+  RSA: 'za',
+  ESP: 'es',
+  SPA: 'es',
+  SUI: 'ch',
+  SWI: 'ch',
+  SWE: 'se',
+  TUN: 'tn',
+  TUR: 'tr',
+  USA: 'us',
+  URU: 'uy',
+  UZB: 'uz',
 }
 
 const CANONICAL_NAME_BY_KEY = {
@@ -120,7 +122,6 @@ const CANONICAL_NAME_BY_KEY = {
   ivorianrepublic: 'Ivory Coast',
   ivorycoast: 'Ivory Coast',
   curacao: 'Curacao',
-  curaçao: 'Curacao',
   czechrepublic: 'Czechia',
   czechia: 'Czechia',
   democraticrepublicofcongo: 'Congo DR',
@@ -133,7 +134,6 @@ const CANONICAL_NAME_BY_KEY = {
   republicofkorea: 'South Korea',
   southkorea: 'South Korea',
   turkiye: 'Turkey',
-  türkiye: 'Turkey',
   turkey: 'Turkey',
   unitedstates: 'USA',
   unitedstatesofamerica: 'USA',
@@ -147,18 +147,24 @@ export function canonicalTeamName(name = '') {
 }
 
 export function resolveTeamFlag(team = {}) {
-  const storedFlag = team.flag || ''
-  if (storedFlag) return storedFlag
+  return resolveTeamFlagAsset(team)?.src || ''
+}
 
-  const canonicalName = canonicalTeamName(team.name)
-  if (FLAG_BY_CANONICAL_NAME[canonicalName]) return FLAG_BY_CANONICAL_NAME[canonicalName]
+export function resolveTeamFlagAsset(team = {}) {
+  if (team?.isPlaceholder) return null
 
-  const code = String(team.code || team.short_name || team.tla || '').trim().toUpperCase()
-  return FLAG_BY_CODE[code] || ''
+  const code = String(team.code || team.short_name || team.tla || team.home_team_code || '').trim().toUpperCase()
+  const isoCode = ISO_BY_CODE[code] || isoFromAlpha2Code(code) || ISO_BY_CANONICAL_NAME[canonicalTeamName(team.name)]
+  if (!isoCode) return null
+
+  return {
+    code: isoCode,
+    src: flagSvgUrl(isoCode),
+  }
 }
 
 export function teamsMissingResolvedFlags(teams = []) {
-  return teams.filter((team) => !resolveTeamFlag(team))
+  return teams.filter((team) => !resolveTeamFlagAsset(team))
 }
 
 function teamNameKey(name) {
@@ -167,4 +173,12 @@ function teamNameKey(name) {
     .replace(/[\u0300-\u036f]/g, '')
     .replace(/[^a-zA-Z0-9]+/g, '')
     .toLowerCase()
+}
+
+function flagSvgUrl(isoCode) {
+  return `${FLAG_ASSET_BASE_URL}/${isoCode.toLowerCase()}.svg`
+}
+
+function isoFromAlpha2Code(code) {
+  return /^[A-Z]{2}$/.test(code) ? code.toLowerCase() : ''
 }

@@ -9,7 +9,7 @@ import {
 } from './fixtureDisplay'
 import { possibleMainPickPoints, predictionPotential } from './predictionPreview'
 import { buildLeaderboard, isKnockoutFixture, remainingJokers, roundMultiplier, scoreMatch } from './scoring'
-import { resolveTeamFlag } from './teamFlags'
+import TeamFlag from './TeamFlag'
 import { fixtureKickoffDate, fixtureKickoffMs } from './time'
 
 function useNow(active = true) {
@@ -512,8 +512,6 @@ function BreakdownLine({ active, joker = false, label, value }) {
 }
 
 function TeamPick({ disabled, isPicked, onClick, points, team, upset }) {
-  const flag = <TeamFlag team={team} />
-
   return (
     <button
       className={isPicked ? 'team-pick picked' : 'team-pick'}
@@ -521,7 +519,9 @@ function TeamPick({ disabled, isPicked, onClick, points, team, upset }) {
       onClick={onClick}
       type="button"
     >
-      <span className="team-pick-flag">{flag}</span>
+      <span className="team-pick-flag">
+        <TeamFlag size="fixture" team={team} />
+      </span>
       <span className="team-pick-main">
         <strong>{team.name}</strong>
         <small>{team.isPlaceholder ? team.subtitle : team.code}</small>
@@ -537,25 +537,8 @@ function TeamPick({ disabled, isPicked, onClick, points, team, upset }) {
 function ScoreTeamLabel({ alignRight = false, team }) {
   return (
     <span className={alignRight ? 'score-team score-team-right' : 'score-team'}>
-      <TeamFlag team={team} />
+      <TeamFlag size="compact" team={team} />
       <strong>{team.code || team.name}</strong>
-    </span>
-  )
-}
-
-function TeamFlag({ team }) {
-  const flagValue = resolveTeamFlag(team)
-  const flagIsImage = flagValue.startsWith('http') || flagValue.startsWith('/')
-
-  if (!flagValue && team?.isPlaceholder) return null
-
-  if (flagIsImage) {
-    return <img alt="" className="flag-mark flag-image" src={flagValue} />
-  }
-
-  return (
-    <span className="flag-mark">
-      {flagValue || team?.code?.slice(0, 6) || 'TBD'}
     </span>
   )
 }
