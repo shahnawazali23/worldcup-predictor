@@ -259,12 +259,14 @@ function normalizeFixture(
   const homeScore = match.score?.fullTime?.home ?? null
   const awayScore = match.score?.fullTime?.away ?? null
   const isFinished = match.status === 'FINISHED'
+  const kickoffInstant = parseKickoffInstant(match.utcDate)
 
   // football-data.org returns utcDate as an ISO UTC instant. Store it unchanged as canonical UTC.
   return {
     api_provider: config.provider,
     api_fixture_id: String(match.id),
     external_fixture_id: String(match.id),
+    match_date: kickoffInstant.toISOString().slice(0, 10),
     competition: match.competition?.name || config.competitionCode,
     stage: normalizeStage(match.stage),
     group_name: match.group || null,
@@ -272,8 +274,8 @@ function normalizeFixture(
     away_team: awayTeam.name || null,
     home_team_code: homeTeam.tla || null,
     away_team_code: awayTeam.tla || null,
-    kickoff_time_utc: match.utcDate,
-    kickoff_at: match.utcDate,
+    kickoff_time_utc: kickoffInstant.toISOString(),
+    kickoff_at: kickoffInstant.toISOString(),
     venue: match.venue || null,
     venue_timezone: null,
     team1_id: teamIdsByApiId[homeApiId] || null,
@@ -289,6 +291,14 @@ function normalizeFixture(
     status: match.status || 'SCHEDULED',
     last_synced_at: new Date().toISOString(),
   }
+}
+
+function parseKickoffInstant(utcDate: string) {
+  const kickoffInstant = new Date(utcDate)
+  if (Number.isNaN(kickoffInstant.getTime())) {
+    throw new Error(`Invalid football-data utcDate for fixture sync: ${utcDate}`)
+  }
+  return kickoffInstant
 }
 
 function uniqueTeams(matches: FootballDataMatch[], provider: string): NormalizedTeam[] {
