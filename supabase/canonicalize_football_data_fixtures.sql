@@ -13,6 +13,11 @@
 -- - team1_id/team2_id
 -- - canonical kickoff instant: coalesce(kickoff_time_utc, kickoff_at)
 --
+-- Provider note:
+-- Legacy seed data and football-data.org can use different text for the same stage
+-- or competition, for example "Group Stage" vs "GROUP_STAGE". The migration
+-- normalizes those labels before matching.
+--
 -- Safety:
 -- - The migration aborts if any prediction on a legacy fixture cannot be mapped.
 -- - The migration aborts if prediction count changes.
@@ -22,6 +27,35 @@
 -- ============================================================================
 -- BEFORE / DRY RUN
 -- ============================================================================
+
+create or replace function pg_temp.fixture_stage_key(stage text)
+returns text
+language sql
+immutable
+as $$
+  select case
+    when stage is null or btrim(stage) = '' then 'unknown'
+    when lower(stage) in ('group', 'group stage', 'group_stage', 'regular season') then 'group'
+    when lower(stage) in ('last_16', 'last 16', 'round of 16', 'round_of_16') then 'round_of_16'
+    when lower(stage) in ('quarter_finals', 'quarter finals', 'quarter-final', 'quarter final', 'quarterfinals') then 'quarter_finals'
+    when lower(stage) in ('semi_finals', 'semi finals', 'semi-final', 'semi final', 'semifinals') then 'semi_finals'
+    when lower(stage) in ('third_place', 'third place', 'third place play-off', 'third-place play-off') then 'third_place'
+    when lower(stage) in ('final', 'finals') then 'final'
+    else lower(regexp_replace(stage, '[^a-zA-Z0-9]+', '_', 'g'))
+  end
+$$;
+
+create or replace function pg_temp.fixture_competition_key(competition text)
+returns text
+language sql
+immutable
+as $$
+  select case
+    when competition is null or btrim(competition) = '' then 'unknown'
+    when lower(competition) like '%world cup%' then 'world_cup'
+    else lower(regexp_replace(competition, '[^a-zA-Z0-9]+', '_', 'g'))
+  end
+$$;
 
 -- 1. Prediction count before migration.
 select count(*) as prediction_count_before
@@ -52,8 +86,8 @@ with fixture_map as (
   from public.fixtures legacy
   left join public.fixtures fd
     on fd.api_provider = 'football-data'
-   and coalesce(fd.competition, 'FIFA World Cup 2026') = coalesce(legacy.competition, 'FIFA World Cup 2026')
-   and coalesce(fd.stage, '') = coalesce(legacy.stage, '')
+   and pg_temp.fixture_competition_key(fd.competition) = pg_temp.fixture_competition_key(legacy.competition)
+   and pg_temp.fixture_stage_key(fd.stage) = pg_temp.fixture_stage_key(legacy.stage)
    and fd.team1_id = legacy.team1_id
    and fd.team2_id = legacy.team2_id
    and coalesce(fd.kickoff_time_utc, fd.kickoff_at) = coalesce(legacy.kickoff_time_utc, legacy.kickoff_at)
@@ -83,8 +117,8 @@ with fixture_map as (
   from public.fixtures legacy
   left join public.fixtures fd
     on fd.api_provider = 'football-data'
-   and coalesce(fd.competition, 'FIFA World Cup 2026') = coalesce(legacy.competition, 'FIFA World Cup 2026')
-   and coalesce(fd.stage, '') = coalesce(legacy.stage, '')
+   and pg_temp.fixture_competition_key(fd.competition) = pg_temp.fixture_competition_key(legacy.competition)
+   and pg_temp.fixture_stage_key(fd.stage) = pg_temp.fixture_stage_key(legacy.stage)
    and fd.team1_id = legacy.team1_id
    and fd.team2_id = legacy.team2_id
    and coalesce(fd.kickoff_time_utc, fd.kickoff_at) = coalesce(legacy.kickoff_time_utc, legacy.kickoff_at)
@@ -100,7 +134,70 @@ join fixture_map m
 where m.football_data_fixture_id is null
 order by p.user_id, p.fixture_id;
 
--- 5. Must be zero before migration: same user predicted both legacy and football-data rows.
+-- 5. Diagnostic for any rows returned by query 4.
+-- This shows the legacy fixture details and the closest football-data candidates.
+-- Use this before adding any manual override; do not guess.
+with unmapped_legacy_fixtures as (
+  select distinct
+    legacy.id,
+    legacy.api_fixture_id,
+    legacy.home_team,
+    legacy.away_team,
+    legacy.team1_id,
+    legacy.team2_id,
+    legacy.stage,
+    legacy.competition,
+    coalesce(legacy.kickoff_time_utc, legacy.kickoff_at) as kickoff_time_utc
+  from public.predictions p
+  join public.fixtures legacy
+    on legacy.id = p.fixture_id
+  left join public.fixtures fd
+    on fd.api_provider = 'football-data'
+   and pg_temp.fixture_competition_key(fd.competition) = pg_temp.fixture_competition_key(legacy.competition)
+   and pg_temp.fixture_stage_key(fd.stage) = pg_temp.fixture_stage_key(legacy.stage)
+   and fd.team1_id = legacy.team1_id
+   and fd.team2_id = legacy.team2_id
+   and coalesce(fd.kickoff_time_utc, fd.kickoff_at) = coalesce(legacy.kickoff_time_utc, legacy.kickoff_at)
+  where legacy.api_provider = 'legacy'
+    and fd.id is null
+)
+select
+  legacy.id as legacy_fixture_id,
+  legacy.api_fixture_id as legacy_api_fixture_id,
+  legacy.home_team as legacy_home_team,
+  legacy.away_team as legacy_away_team,
+  legacy.stage as legacy_stage,
+  legacy.kickoff_time_utc as legacy_kickoff_time_utc,
+  fd.id as candidate_football_data_fixture_id,
+  fd.api_fixture_id as candidate_api_fixture_id,
+  fd.home_team as candidate_home_team,
+  fd.away_team as candidate_away_team,
+  fd.stage as candidate_stage,
+  coalesce(fd.kickoff_time_utc, fd.kickoff_at) as candidate_kickoff_time_utc,
+  abs(extract(epoch from (coalesce(fd.kickoff_time_utc, fd.kickoff_at) - legacy.kickoff_time_utc))) / 3600
+    as kickoff_difference_hours
+from unmapped_legacy_fixtures legacy
+left join lateral (
+  select fd.*
+  from public.fixtures fd
+  where fd.api_provider = 'football-data'
+    and (
+      (fd.team1_id = legacy.team1_id and fd.team2_id = legacy.team2_id)
+      or (fd.team1_id = legacy.team2_id and fd.team2_id = legacy.team1_id)
+      or coalesce(fd.kickoff_time_utc, fd.kickoff_at)::date = legacy.kickoff_time_utc::date
+    )
+  order by
+    case
+      when fd.team1_id = legacy.team1_id and fd.team2_id = legacy.team2_id then 0
+      when fd.team1_id = legacy.team2_id and fd.team2_id = legacy.team1_id then 1
+      else 2
+    end,
+    abs(extract(epoch from (coalesce(fd.kickoff_time_utc, fd.kickoff_at) - legacy.kickoff_time_utc)))
+  limit 5
+) fd on true
+order by legacy.kickoff_time_utc, legacy.id, kickoff_difference_hours nulls last;
+
+-- 6. Must be zero before migration: same user predicted both legacy and football-data rows.
 -- If this returns rows, resolve manually before running the migration because preserving
 -- prediction count is impossible with the unique (user_id, fixture_id) constraint.
 with fixture_map as (
@@ -108,8 +205,8 @@ with fixture_map as (
   from public.fixtures legacy
   join public.fixtures fd
     on fd.api_provider = 'football-data'
-   and coalesce(fd.competition, 'FIFA World Cup 2026') = coalesce(legacy.competition, 'FIFA World Cup 2026')
-   and coalesce(fd.stage, '') = coalesce(legacy.stage, '')
+   and pg_temp.fixture_competition_key(fd.competition) = pg_temp.fixture_competition_key(legacy.competition)
+   and pg_temp.fixture_stage_key(fd.stage) = pg_temp.fixture_stage_key(legacy.stage)
    and fd.team1_id = legacy.team1_id
    and fd.team2_id = legacy.team2_id
    and coalesce(fd.kickoff_time_utc, fd.kickoff_at) = coalesce(legacy.kickoff_time_utc, legacy.kickoff_at)
@@ -129,7 +226,7 @@ join public.predictions canonical_prediction
  and canonical_prediction.user_id = legacy_prediction.user_id
 order by legacy_prediction.user_id, legacy_prediction.fixture_id;
 
--- 6. Duplicate match groups before migration.
+-- 7. Duplicate match groups before migration.
 with duplicate_groups as (
   select
     coalesce(competition, 'FIFA World Cup 2026') as competition,
@@ -154,6 +251,35 @@ order by kickoff_time_utc, stage;
 -- ============================================================================
 -- MIGRATION
 -- ============================================================================
+
+create or replace function pg_temp.fixture_stage_key(stage text)
+returns text
+language sql
+immutable
+as $$
+  select case
+    when stage is null or btrim(stage) = '' then 'unknown'
+    when lower(stage) in ('group', 'group stage', 'group_stage', 'regular season') then 'group'
+    when lower(stage) in ('last_16', 'last 16', 'round of 16', 'round_of_16') then 'round_of_16'
+    when lower(stage) in ('quarter_finals', 'quarter finals', 'quarter-final', 'quarter final', 'quarterfinals') then 'quarter_finals'
+    when lower(stage) in ('semi_finals', 'semi finals', 'semi-final', 'semi final', 'semifinals') then 'semi_finals'
+    when lower(stage) in ('third_place', 'third place', 'third place play-off', 'third-place play-off') then 'third_place'
+    when lower(stage) in ('final', 'finals') then 'final'
+    else lower(regexp_replace(stage, '[^a-zA-Z0-9]+', '_', 'g'))
+  end
+$$;
+
+create or replace function pg_temp.fixture_competition_key(competition text)
+returns text
+language sql
+immutable
+as $$
+  select case
+    when competition is null or btrim(competition) = '' then 'unknown'
+    when lower(competition) like '%world cup%' then 'world_cup'
+    else lower(regexp_replace(competition, '[^a-zA-Z0-9]+', '_', 'g'))
+  end
+$$;
 
 begin;
 
@@ -231,8 +357,8 @@ select
 from public.fixtures legacy
 left join public.fixtures fd
   on fd.api_provider = 'football-data'
- and coalesce(fd.competition, 'FIFA World Cup 2026') = coalesce(legacy.competition, 'FIFA World Cup 2026')
- and coalesce(fd.stage, '') = coalesce(legacy.stage, '')
+ and pg_temp.fixture_competition_key(fd.competition) = pg_temp.fixture_competition_key(legacy.competition)
+ and pg_temp.fixture_stage_key(fd.stage) = pg_temp.fixture_stage_key(legacy.stage)
  and fd.team1_id = legacy.team1_id
  and fd.team2_id = legacy.team2_id
  and coalesce(fd.kickoff_time_utc, fd.kickoff_at) = coalesce(legacy.kickoff_time_utc, legacy.kickoff_at)
