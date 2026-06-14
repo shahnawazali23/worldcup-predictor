@@ -45,8 +45,9 @@ type SavedTeam = {
   api_team_id: string | null
 }
 
-type UnresolvedFixtureDebug = {
+type SkippedFixtureDebug = {
   apiFixtureId: string
+  reason: string
   homeTeamName: string | null
   awayTeamName: string | null
   canonicalHomeName: string | null
@@ -97,16 +98,6 @@ const FOOTBALL_DATA_TEAM_NAME_ALIASES: Record<string, string> = {
   usa: 'USA',
 }
 
-class UnresolvedFixturesError extends Error {
-  unresolvedFixtures: UnresolvedFixtureDebug[]
-
-  constructor(unresolvedFixtures: UnresolvedFixtureDebug[]) {
-    super(`Unable to resolve teams for ${unresolvedFixtures.length} fixtures.`)
-    this.name = 'UnresolvedFixturesError'
-    this.unresolvedFixtures = unresolvedFixtures
-  }
-}
-
 Deno.serve(async () => {
   const startedAt = Date.now()
   let supabase: ReturnType<typeof createClient> | null = null
@@ -138,24 +129,34 @@ Deno.serve(async () => {
     const teams = uniqueTeams(matches, config.provider)
     const teamIdsByApiId = await syncTeamsAndBuildLookup(supabase, teams, config.provider)
 
-    const fixtures = matches.map((match) => normalizeFixture(match, teamIdsByApiId, config))
-    assertFixturesHaveResolvedTeams(matches, fixtures, teamIdsByApiId)
-    const { error: fixturesError } = await supabase
-      .from('fixtures')
-      .upsert(fixtures, { onConflict: 'api_provider,external_fixture_id' })
+    const { fixturesToImport, placeholderFixtures } = buildFixturesWithPlaceholders(matches, teamIdsByApiId, config)
+    if (placeholderFixtures.length > 0) {
+      console.log('[sync-fixtures] imported placeholder fixtures without assigned teams', {
+        placeholderFixtureCount: placeholderFixtures.length,
+        placeholderFixtureIds: placeholderFixtures.map((fixture) => fixture.apiFixtureId),
+        placeholderFixtures,
+      })
+    }
 
-    if (fixturesError) throw new Error(`Supabase fixtures upsert failed: ${formatErrorMessage(fixturesError)}`)
+    if (fixturesToImport.length > 0) {
+      const { error: fixturesError } = await supabase
+        .from('fixtures')
+        .upsert(fixturesToImport, { onConflict: 'api_provider,external_fixture_id' })
 
-    const importedResults = fixtures.filter((fixture) => fixture.is_finished).length
+      if (fixturesError) throw new Error(`Supabase fixtures upsert failed: ${formatErrorMessage(fixturesError)}`)
+    }
+
+    const importedResults = fixturesToImport.filter((fixture) => fixture.is_finished).length
     await safeLogSync(supabase, config.provider, {
       status: 'success',
-      imported_fixtures: fixtures.length,
+      imported_fixtures: fixturesToImport.length,
       imported_results: importedResults,
-      message: `Synced ${fixtures.length} ${config.competitionCode} fixtures for ${config.season}.`,
+      message: `Synced ${fixturesToImport.length} ${config.competitionCode} fixtures for ${config.season}; placeholders ${placeholderFixtures.length}.`,
     })
 
     console.log('[sync-fixtures] sync complete', {
-      fixtures: fixtures.length,
+      importedFixtures: fixturesToImport.length,
+      placeholderFixtures: placeholderFixtures.length,
       results: importedResults,
       durationMs: Date.now() - startedAt,
     })
@@ -165,7 +166,13 @@ Deno.serve(async () => {
       provider: config.provider,
       competitionCode: config.competitionCode,
       season: config.season,
-      fixtures: fixtures.length,
+      fixtures: fixturesToImport.length,
+      importedFixtures: fixturesToImport.length,
+      skippedFixtures: 0,
+      skippedFixtureIds: [],
+      placeholderFixtures: placeholderFixtures.length,
+      placeholderFixtureIds: placeholderFixtures.map((fixture) => fixture.apiFixtureId),
+      placeholderFixtureDetails: placeholderFixtures,
       results: importedResults,
       durationMs: Date.now() - startedAt,
     })
@@ -190,12 +197,6 @@ Deno.serve(async () => {
       competitionCode: config?.competitionCode || null,
       season: config?.season || null,
       error: serializedError.message,
-      ...(error instanceof UnresolvedFixturesError
-        ? {
-          unresolvedFixtureCount: error.unresolvedFixtures.length,
-          unresolvedFixtures: error.unresolvedFixtures,
-        }
-        : {}),
       details: serializedError,
       durationMs: Date.now() - startedAt,
     })
@@ -326,8 +327,8 @@ function normalizeFixture(
     competition: match.competition?.name || config.competitionCode,
     stage: normalizeStage(match.stage),
     group_name: match.group || null,
-    home_team: homeTeam.name ? canonicalTeamName(homeTeam.name) : null,
-    away_team: awayTeam.name ? canonicalTeamName(awayTeam.name) : null,
+    home_team: participantDisplayLabel(match, 'home'),
+    away_team: participantDisplayLabel(match, 'away'),
     home_team_code: homeTeam.tla || null,
     away_team_code: awayTeam.tla || null,
     kickoff_time_utc: kickoffInstant.toISOString(),
@@ -349,40 +350,59 @@ function normalizeFixture(
   }
 }
 
-function assertFixturesHaveResolvedTeams(
+function buildFixturesWithPlaceholders(
   matches: FootballDataMatch[],
-  fixtures: ReturnType<typeof normalizeFixture>[],
   teamIdsByApiId: Record<string, string>,
-) {
-  const unresolvedFixtures: UnresolvedFixtureDebug[] = fixtures
-    .map((fixture, index) => {
-      const match = matches[index]
-      const homeTeam = match.homeTeam || {}
-      const awayTeam = match.awayTeam || {}
-      const homeApiId = String(homeTeam.id || homeTeam.tla || homeTeam.name || '')
-      const awayApiId = String(awayTeam.id || awayTeam.tla || awayTeam.name || '')
+  config: SyncConfig,
+): { fixturesToImport: ReturnType<typeof normalizeFixture>[]; placeholderFixtures: SkippedFixtureDebug[] } {
+  const fixturesToImport: ReturnType<typeof normalizeFixture>[] = []
+  const placeholderFixtures: SkippedFixtureDebug[] = []
 
-      return {
-        apiFixtureId: fixture.api_fixture_id,
+  for (const match of matches) {
+    const homeTeam = match.homeTeam || {}
+    const awayTeam = match.awayTeam || {}
+    const homeApiId = String(homeTeam.id || homeTeam.tla || homeTeam.name || '')
+    const awayApiId = String(awayTeam.id || awayTeam.tla || awayTeam.name || '')
+    const resolvedTeam1Id = teamIdsByApiId[homeApiId] || null
+    const resolvedTeam2Id = teamIdsByApiId[awayApiId] || null
+
+    if (!homeTeam.name || !awayTeam.name || !homeApiId || !awayApiId || !resolvedTeam1Id || !resolvedTeam2Id) {
+      placeholderFixtures.push({
+        apiFixtureId: String(match.id),
+        reason: placeholderFixtureReason(homeTeam, awayTeam, homeApiId, awayApiId, resolvedTeam1Id, resolvedTeam2Id),
         homeTeamName: homeTeam.name || null,
         awayTeamName: awayTeam.name || null,
-        canonicalHomeName: homeTeam.name ? canonicalTeamName(homeTeam.name) : null,
-        canonicalAwayName: awayTeam.name ? canonicalTeamName(awayTeam.name) : null,
+        canonicalHomeName: participantDisplayLabel(match, 'home'),
+        canonicalAwayName: participantDisplayLabel(match, 'away'),
         footballDataHomeId: homeApiId || null,
         footballDataAwayId: awayApiId || null,
-        resolvedTeam1Id: teamIdsByApiId[homeApiId] || null,
-        resolvedTeam2Id: teamIdsByApiId[awayApiId] || null,
-      }
-    })
-    .filter((fixture) => !fixture.resolvedTeam1Id || !fixture.resolvedTeam2Id)
+        resolvedTeam1Id,
+        resolvedTeam2Id,
+      })
+    }
 
-  if (unresolvedFixtures.length === 0) return
+    fixturesToImport.push(normalizeFixture(match, teamIdsByApiId, config))
+  }
 
-  console.error('[sync-fixtures] unresolved fixtures detail', JSON.stringify({
-    unresolvedFixtureCount: unresolvedFixtures.length,
-    unresolvedFixtures,
-  }))
-  throw new UnresolvedFixturesError(unresolvedFixtures)
+  return { fixturesToImport, placeholderFixtures }
+}
+
+function placeholderFixtureReason(
+  homeTeam: FootballDataTeam,
+  awayTeam: FootballDataTeam,
+  homeApiId: string,
+  awayApiId: string,
+  resolvedTeam1Id: string | null,
+  resolvedTeam2Id: string | null,
+) {
+  const reasons: string[] = []
+  if (!homeTeam.name) reasons.push('missing_home_team')
+  if (!awayTeam.name) reasons.push('missing_away_team')
+  if (!homeApiId) reasons.push('missing_home_team_id')
+  if (!awayApiId) reasons.push('missing_away_team_id')
+  if (homeApiId && !resolvedTeam1Id) reasons.push('unresolved_home_team')
+  if (awayApiId && !resolvedTeam2Id) reasons.push('unresolved_away_team')
+  return reasons.join(',') || 'unknown'
 }
 
 function parseKickoffInstant(utcDate: string) {
@@ -391,6 +411,25 @@ function parseKickoffInstant(utcDate: string) {
     throw new Error(`Invalid football-data utcDate for fixture sync: ${utcDate}`)
   }
   return kickoffInstant
+}
+
+function participantDisplayLabel(match: FootballDataMatch, side: 'home' | 'away') {
+  const team = side === 'home' ? match.homeTeam : match.awayTeam
+  if (team?.name) return canonicalTeamName(team.name)
+  if (team?.shortName) return team.shortName
+  if (team?.tla) return team.tla
+  return placeholderParticipantLabel(match, side)
+}
+
+function placeholderParticipantLabel(match: FootballDataMatch, side: 'home' | 'away') {
+  const stage = normalizeStage(match.stage)
+  const sideLabel = side === 'home' ? 'Home' : 'Away'
+
+  if (match.group) {
+    return `${sideLabel} ${stage} participant (${normalizeStage(match.group)})`
+  }
+
+  return `${sideLabel} ${stage} participant`
 }
 
 function uniqueTeams(matches: FootballDataMatch[], provider: string): NormalizedTeam[] {
