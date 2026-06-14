@@ -351,6 +351,37 @@ async function syncTeamsAndBuildLookup(
   const teamsToInsert = teams.filter((team) => {
     return !rowsByProviderId.has(team.api_team_id) && !rowsByName.has(team.name)
   })
+  const teamsToAttachProviderMetadata = teams.filter((team) => {
+    const existingTeam = rowsByName.get(team.name)
+    return Boolean(
+      existingTeam &&
+        !rowsByProviderId.has(team.api_team_id) &&
+        existingTeam.api_provider == null &&
+        existingTeam.api_team_id == null,
+    )
+  })
+
+  let providerMetadataAttached = 0
+  for (const team of teamsToAttachProviderMetadata) {
+    const existingTeam = rowsByName.get(team.name)
+    if (!existingTeam) continue
+
+    const { error: attachProviderError } = await supabase
+      .from('teams')
+      .update({
+        api_provider: provider,
+        api_team_id: team.api_team_id,
+      })
+      .eq('id', existingTeam.id)
+      .is('api_provider', null)
+      .is('api_team_id', null)
+
+    if (attachProviderError) {
+      throw new Error(`Supabase teams provider metadata update failed: ${formatErrorMessage(attachProviderError)}`)
+    }
+
+    providerMetadataAttached += 1
+  }
 
   if (teamsToInsert.length > 0) {
     const { error: teamsError } = await supabase
@@ -407,6 +438,7 @@ async function syncTeamsAndBuildLookup(
     provider,
     incomingTeams: teams.length,
     insertedTeams: teamsToInsert.length,
+    providerMetadataAttached,
     reusedExistingTeams: teams.length - teamsToInsert.length,
     unresolvedTeams: unresolvedTeams.length,
   })
