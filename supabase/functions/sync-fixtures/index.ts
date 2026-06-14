@@ -33,6 +33,7 @@ type NormalizedTeam = {
   api_provider: string
   api_team_id: string
   name: string
+  source_name: string
   short_name: string
   fifa_rank: number
 }
@@ -57,6 +58,32 @@ type SyncConfig = {
 const MAX_RETRIES = 3
 const BASE_BACKOFF_MS = 750
 const DEFAULT_REQUEST_TIMEOUT_MS = 15_000
+const FOOTBALL_DATA_TEAM_NAME_ALIASES: Record<string, string> = {
+  'bosnia-herzegovina': 'Bosnia and Herzegovina',
+  'bosnia & herzegovina': 'Bosnia and Herzegovina',
+  'cape verde islands': 'Cape Verde',
+  'cote divoire': 'Ivory Coast',
+  'côte divoire': 'Ivory Coast',
+  'cote d ivoire': 'Ivory Coast',
+  "cote d'ivoire": 'Ivory Coast',
+  "côte d'ivoire": 'Ivory Coast',
+  'curaçao': 'Curacao',
+  'czech republic': 'Czechia',
+  'dr congo': 'Congo DR',
+  'd r congo': 'Congo DR',
+  'democratic republic of congo': 'Congo DR',
+  'ir iran': 'Iran',
+  'iran islamic republic of': 'Iran',
+  'ivory coast': 'Ivory Coast',
+  'korea republic': 'South Korea',
+  'republic of korea': 'South Korea',
+  'south korea': 'South Korea',
+  'turkiye': 'Turkey',
+  'türkiye': 'Turkey',
+  'united states': 'USA',
+  'united states of america': 'USA',
+  usa: 'USA',
+}
 
 Deno.serve(async () => {
   const startedAt = Date.now()
@@ -90,6 +117,7 @@ Deno.serve(async () => {
     const teamIdsByApiId = await syncTeamsAndBuildLookup(supabase, teams, config.provider)
 
     const fixtures = matches.map((match) => normalizeFixture(match, teamIdsByApiId, config))
+    assertFixturesHaveResolvedTeams(matches, fixtures, teamIdsByApiId)
     const { error: fixturesError } = await supabase
       .from('fixtures')
       .upsert(fixtures, { onConflict: 'api_provider,external_fixture_id' })
@@ -270,8 +298,8 @@ function normalizeFixture(
     competition: match.competition?.name || config.competitionCode,
     stage: normalizeStage(match.stage),
     group_name: match.group || null,
-    home_team: homeTeam.name || null,
-    away_team: awayTeam.name || null,
+    home_team: homeTeam.name ? canonicalTeamName(homeTeam.name) : null,
+    away_team: awayTeam.name ? canonicalTeamName(awayTeam.name) : null,
     home_team_code: homeTeam.tla || null,
     away_team_code: awayTeam.tla || null,
     kickoff_time_utc: kickoffInstant.toISOString(),
@@ -293,6 +321,39 @@ function normalizeFixture(
   }
 }
 
+function assertFixturesHaveResolvedTeams(
+  matches: FootballDataMatch[],
+  fixtures: ReturnType<typeof normalizeFixture>[],
+  teamIdsByApiId: Record<string, string>,
+) {
+  const unresolvedFixtures = fixtures
+    .map((fixture, index) => {
+      const match = matches[index]
+      const homeTeam = match.homeTeam || {}
+      const awayTeam = match.awayTeam || {}
+      const homeApiId = String(homeTeam.id || homeTeam.tla || homeTeam.name || '')
+      const awayApiId = String(awayTeam.id || awayTeam.tla || awayTeam.name || '')
+
+      return {
+        api_fixture_id: fixture.api_fixture_id,
+        home_team_name: homeTeam.name || null,
+        home_team_canonical_name: homeTeam.name ? canonicalTeamName(homeTeam.name) : null,
+        home_football_data_team_id: homeApiId || null,
+        home_resolved_database_team_id: teamIdsByApiId[homeApiId] || null,
+        away_team_name: awayTeam.name || null,
+        away_team_canonical_name: awayTeam.name ? canonicalTeamName(awayTeam.name) : null,
+        away_football_data_team_id: awayApiId || null,
+        away_resolved_database_team_id: teamIdsByApiId[awayApiId] || null,
+      }
+    })
+    .filter((fixture) => !fixture.home_resolved_database_team_id || !fixture.away_resolved_database_team_id)
+
+  if (unresolvedFixtures.length === 0) return
+
+  console.error('[sync-fixtures] fixtures with unresolved teams', { unresolvedFixtures })
+  throw new Error(`Unable to resolve teams for ${unresolvedFixtures.length} fixtures. See function logs for team names and IDs.`)
+}
+
 function parseKickoffInstant(utcDate: string) {
   const kickoffInstant = new Date(utcDate)
   if (Number.isNaN(kickoffInstant.getTime())) {
@@ -308,10 +369,12 @@ function uniqueTeams(matches: FootballDataMatch[], provider: string): Normalized
     for (const team of [match.homeTeam, match.awayTeam]) {
       if (!team?.name) continue
       const apiTeamId = String(team.id || team.tla || team.name)
+      const canonicalName = canonicalTeamName(team.name)
       teamsByApiId.set(apiTeamId, {
         api_provider: provider,
         api_team_id: apiTeamId,
-        name: team.name,
+        name: canonicalName,
+        source_name: team.name,
         short_name: team.tla || team.shortName || team.name,
         fifa_rank: 999,
       })
@@ -319,6 +382,22 @@ function uniqueTeams(matches: FootballDataMatch[], provider: string): Normalized
   }
 
   return [...teamsByApiId.values()]
+}
+
+function canonicalTeamName(name: string) {
+  const normalizedName = normalizeTeamNameKey(name)
+  return FOOTBALL_DATA_TEAM_NAME_ALIASES[normalizedName] || name
+}
+
+function normalizeTeamNameKey(name: string) {
+  return name
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[’`]/g, "'")
+    .replace(/[^\w\s'&-]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase()
 }
 
 async function syncTeamsAndBuildLookup(
@@ -436,12 +515,25 @@ async function syncTeamsAndBuildLookup(
     if (resolvedTeam?.id) {
       teamIdsByApiId[team.api_team_id] = resolvedTeam.id
     } else {
-      unresolvedTeams.push(`${team.name} (${team.api_team_id})`)
+      unresolvedTeams.push(`${team.source_name} -> ${team.name} (${team.api_team_id})`)
     }
   }
 
   if (unresolvedTeams.length > 0) {
     console.warn('[sync-fixtures] some teams could not be resolved to database IDs', { unresolvedTeams })
+  }
+
+  const aliasedTeams = teams
+    .filter((team) => team.source_name !== team.name)
+    .map((team) => ({
+      sourceName: team.source_name,
+      canonicalName: team.name,
+      footballDataTeamId: team.api_team_id,
+      resolvedDatabaseTeamId: teamIdsByApiId[team.api_team_id] || null,
+    }))
+
+  if (aliasedTeams.length > 0) {
+    console.log('[sync-fixtures] provider team names matched through aliases', { aliasedTeams })
   }
 
   console.log('[sync-fixtures] teams resolved', {
