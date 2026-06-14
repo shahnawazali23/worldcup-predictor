@@ -40,7 +40,7 @@ export function mainPickBasePoints(fixture, prediction, teamsById) {
   const pickedId = prediction.pick_is_draw ? 'draw' : prediction.picked_team_id
 
   if (!winnerId || !pickedId) return 0
-  if (pickedId === 'draw') return 1
+  if (pickedId === 'draw') return winnerId === 'draw' ? 1 : 0
   if (winnerId === 'draw') return 0
 
   const pickedTeam = teamsById[pickedId]

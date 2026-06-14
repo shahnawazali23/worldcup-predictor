@@ -70,6 +70,20 @@ assert.equal(
   true,
 )
 assert.equal(scoreMatch(canonicalIdentityFixture, { picked_team_id: 'usaLegacy' }, teamsById).total, 1)
+assert.equal(scoreMatch(canonicalIdentityFixture, { pick_is_draw: true }, teamsById).correctPick, false)
+assert.equal(scoreMatch(canonicalIdentityFixture, { pick_is_draw: true }, teamsById).total, 0)
+
+const drawnFixture = {
+  ...canonicalIdentityFixture,
+  id: 'draw1',
+  goals_team1: 1,
+  goals_team2: 1,
+  winner_team_id: null,
+  is_draw: true,
+}
+
+assert.equal(scoreMatch(drawnFixture, { pick_is_draw: true }, teamsById).correctPick, true)
+assert.equal(scoreMatch(drawnFixture, { pick_is_draw: true }, teamsById).total, 1)
 
 const finalFixture = {
   id: 'f1',
