@@ -429,10 +429,10 @@ export default function Predictions({ active = true, data, onPredictionSaved, se
                   {locked
                     ? '🔒 Predictions Locked'
                     : isSaved
-                    ? '✓ Prediction Saved'
+                    ? '✓ Saved'
                     : savingFixtureId === fixture.id
                       ? 'Saving...'
-                      : 'Save Prediction'}
+                      : 'Save'}
                 </button>
               </div>
 
@@ -451,7 +451,7 @@ export default function Predictions({ active = true, data, onPredictionSaved, se
                         ? `Picked: ${team2.name}`
                         : 'No pick yet'}
                 </strong>
-                {isSaved && <em className="saved-badge">✓ Prediction Saved</em>}
+                {isSaved && <em className="saved-badge">✓ Saved</em>}
               </div>
             </article>
           )
