@@ -1951,6 +1951,17 @@ select:disabled {
   color: #7A5B16;
 }
 
+.insight-explanation {
+  margin: 2px 0 0;
+  padding: 8px 10px;
+  border-radius: 8px;
+  color: #24364b;
+  background: #f3f6f8;
+  font-size: 0.82rem;
+  font-weight: 750;
+  line-height: 1.35;
+}
+
 .history-total {
   margin-top: 4px;
   padding: 9px 10px;
@@ -2341,6 +2352,23 @@ select:disabled {
 .choice,
 .fixture-options select {
   color: var(--navy);
+}
+
+.save-prediction-button {
+  min-height: 40px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 999px;
+  color: #ffffff;
+  background: var(--navy);
+  font-weight: 950;
+  cursor: pointer;
+}
+
+.save-prediction-button:disabled {
+  color: #64748b;
+  background: #dbe3ea;
+  cursor: not-allowed;
 }
 
 /* Focused prediction polish */

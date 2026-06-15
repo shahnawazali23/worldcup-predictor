@@ -63,10 +63,13 @@ function History({ data, session }) {
             : data.teamsById[prediction.picked_team_id]
           const predictedScore = formatPredictedScore(prediction)
           const resultStatus = getResultStatus(fixture, prediction, score)
-          const exactScorePoints = score?.scoreline === 3 ? 3 : 0
-          const goalDifferencePoints = score?.scoreline === 1 ? 1 : 0
-          const basePoints = score ? score.main + score.scoreline : null
+          const exactScorePoints = score?.exactScore || 0
+          const insightPoints = score?.insight || 0
+          const basePoints = score ? score.main + exactScorePoints + insightPoints : null
           const jokerBonus = score && prediction.joker_used ? score.total - basePoints : null
+          const insightExplanation = score
+            ? insightExplanationFor({ fixture, prediction, score, team1, team2 })
+            : ''
 
           return (
             <article className="history-row" key={fixture.id}>
@@ -111,14 +114,24 @@ function History({ data, session }) {
                     <ActualResult fixture={fixture} team1={team1} team2={team2} />
                     <span>{fixture.is_finished ? 'Final' : 'Pending result'}</span>
                   </div>
+                  {score?.insightDetails.expected && (
+                    <div>
+                      <small>Expected Score</small>
+                      <strong>
+                        {score.insightDetails.expected.home}-{score.insightDetails.expected.away}
+                      </strong>
+                      <span>Internal pre-match forecast</span>
+                    </div>
+                  )}
                 </div>
 
                 <div className="history-breakdown">
                   <p className="section-label">Points Breakdown</p>
                   <BreakdownItem label="Winner Prediction" value={score ? score.main : null} />
-                  <BreakdownItem label="Scoreline Bonus" value={score ? exactScorePoints : null} />
-                  <BreakdownItem label="Goal Difference Bonus" value={score ? goalDifferencePoints : null} />
+                  <BreakdownItem label="Exact Score Prediction" value={score ? exactScorePoints : null} />
+                  <BreakdownItem label="Insight Bonus" value={score ? insightPoints : null} />
                   {prediction.joker_used && <BreakdownItem label="Joker Bonus" value={jokerBonus} joker />}
+                  {insightExplanation && <p className="insight-explanation">{insightExplanation}</p>}
                   <div className="history-total">
                     <span>Total Points Earned</span>
                     <strong>{score ? score.total : 'Pending'}</strong>
@@ -234,6 +247,53 @@ function BreakdownItem({ joker = false, label, value }) {
 function formatPredictedScore(prediction) {
   if (prediction.pred_goals_team1 == null || prediction.pred_goals_team2 == null) return 'No score prediction'
   return `Score ${prediction.pred_goals_team1}-${prediction.pred_goals_team2}`
+}
+
+function insightExplanationFor({ fixture, prediction, score, team1, team2 }) {
+  const expected = score.insightDetails.expected
+  if (!expected || prediction.pred_goals_team1 == null || prediction.pred_goals_team2 == null) return ''
+
+  const homeName = team1?.name || fixture.home_team || 'Home team'
+  const awayName = team2?.name || fixture.away_team || 'Away team'
+  const predicted = `${prediction.pred_goals_team1}-${prediction.pred_goals_team2}`
+  const actual = `${fixture.goals_team1}-${fixture.goals_team2}`
+  const expectedText = `${expected.home}-${expected.away}`
+  const actualMargin = fixture.goals_team1 - fixture.goals_team2
+  const expectedMargin = expected.home - expected.away
+  const predictedMargin = prediction.pred_goals_team1 - prediction.pred_goals_team2
+  const actualWinner = actualMargin > 0 ? homeName : actualMargin < 0 ? awayName : 'the draw'
+  const predictedWinner = predictedMargin > 0 ? homeName : predictedMargin < 0 ? awayName : 'the draw'
+
+  if (score.insight > 0) {
+    if (actualMargin === 0 && predictedMargin === 0) {
+      return `You correctly saw ${homeName} and ${awayName} staying level, beating the ${expectedText} forecast with a ${predicted} call.`
+    }
+
+    if (Math.abs(actualMargin) > Math.abs(expectedMargin) && predictedWinner === actualWinner) {
+      return `You anticipated a bigger ${actualWinner} performance than the ${expectedText} forecast, and your ${predicted} call moved closer to the ${actual} result.`
+    }
+
+    if (fixture.goals_team1 > expected.home || fixture.goals_team2 > expected.away) {
+      const teamName = fixture.goals_team1 > expected.home ? homeName : awayName
+      return `You correctly backed ${teamName} to find more attacking threat than the ${expectedText} forecast suggested.`
+    }
+
+    return `Your ${predicted} prediction read the ${homeName} vs ${awayName} match better than the ${expectedText} forecast.`
+  }
+
+  if (score.insight < 0) {
+    if (predictedWinner !== actualWinner) {
+      return `${actualWinner === 'the draw' ? 'The match stayed level' : `${actualWinner} controlled the result`} far more than your ${predicted} prediction anticipated.`
+    }
+
+    if (Math.abs(actualMargin) > Math.abs(predictedMargin)) {
+      return `${actualWinner} delivered a stronger performance than your ${predicted} prediction suggested, with the match finishing ${actual}.`
+    }
+
+    return `${homeName} and ${awayName} played out differently from your ${predicted} read, with the ${actual} scoreline staying nearer to the ${expectedText} pre-match shape.`
+  }
+
+  return `Your ${predicted} call landed on the same match shape as the ${expectedText} pre-match read for ${homeName} vs ${awayName}.`
 }
 
 function rankTitleFor({ accuracy, exactScores, finishedPicks }) {

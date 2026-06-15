@@ -1,5 +1,7 @@
 import { canonicalTeamName } from './teamFlags.js'
 
+export const INSIGHT_BONUS_ENABLED = true
+
 export const ROUND_MULTIPLIERS = {
   group: 1,
   r32: 1.5,
@@ -65,15 +67,68 @@ export function scorelineBonus(fixture, prediction) {
   if (pred1 == null || pred2 == null) return 0
   if (actual1 == null || actual2 == null) return 0
   if (pred1 === actual1 && pred2 === actual2) return 3
-  if (pred1 - pred2 === actual1 - actual2) return 1
   return 0
 }
 
-export function penaltyBonus(fixture, prediction) {
-  if (!isKnockoutFixture(fixture)) return 0
-  if (prediction.penalty_call == null || prediction.penalty_call === '') return 0
-  if (fixture.went_to_penalties == null) return 0
-  return prediction.penalty_call === (fixture.went_to_penalties ? 'yes' : 'no') ? 5 : -3
+export function expectedScoreForFixture(fixture, teamsById) {
+  const homeTeam = teamsById[fixture.team1_id]
+  const awayTeam = teamsById[fixture.team2_id]
+  const homeRank = rankForTeam(homeTeam, teamsById)
+  const awayRank = rankForTeam(awayTeam, teamsById)
+  const rankEdge = clamp((awayRank - homeRank) / 35, -0.9, 0.9)
+  const homeGoals = clamp(Math.round(1.35 + 0.18 + rankEdge), 0, 5)
+  const awayGoals = clamp(Math.round(1.15 - rankEdge), 0, 5)
+
+  return {
+    away: awayGoals,
+    home: homeGoals,
+  }
+}
+
+function rankForTeam(team, teamsById) {
+  if (!team) return 50
+
+  const canonicalName = canonicalTeamName(team.name)
+  const matchingRanks = Object.values(teamsById)
+    .filter((candidate) => canonicalTeamName(candidate?.name) === canonicalName)
+    .map((candidate) => Number(candidate?.fifa_rank))
+    .filter((rank) => Number.isFinite(rank) && rank > 0 && rank < 999)
+
+  if (matchingRanks.length > 0) return Math.min(...matchingRanks)
+
+  const rank = Number(team.fifa_rank)
+  return Number.isFinite(rank) && rank > 0 && rank < 999 ? rank : 50
+}
+
+export function insightBonus(fixture, prediction, teamsById) {
+  if (!INSIGHT_BONUS_ENABLED) return emptyInsight()
+  if (prediction.pred_goals_team1 == null || prediction.pred_goals_team2 == null) return emptyInsight()
+  if (fixture.goals_team1 == null || fixture.goals_team2 == null) return emptyInsight()
+
+  const expected = expectedScoreForFixture(fixture, teamsById)
+  const modelError = Math.abs(expected.home - fixture.goals_team1) +
+    Math.abs(expected.away - fixture.goals_team2)
+  const predictionError = Math.abs(prediction.pred_goals_team1 - fixture.goals_team1) +
+    Math.abs(prediction.pred_goals_team2 - fixture.goals_team2)
+  const insightScore = modelError - predictionError
+
+  return {
+    bonus: insightScore >= 3 ? 2 : insightScore >= 1 ? 1 : insightScore === 0 ? 0 : -1,
+    expected,
+    insightScore,
+    modelError,
+    predictionError,
+  }
+}
+
+function emptyInsight() {
+  return {
+    bonus: 0,
+    expected: null,
+    insightScore: 0,
+    modelError: 0,
+    predictionError: 0,
+  }
 }
 
 export function scoreMatch(fixture, prediction, teamsById) {
@@ -82,16 +137,18 @@ export function scoreMatch(fixture, prediction, teamsById) {
   const baseMain = mainPickBasePoints(fixture, prediction, teamsById)
   const main = baseMain
   const scoreline = scorelineBonus(fixture, prediction)
-  const penalty = 0
-  const beforeJoker = main + scoreline
+  const insight = insightBonus(fixture, prediction, teamsById)
+  const beforeJoker = main + scoreline + insight.bonus
   const total = prediction.joker_used ? beforeJoker * 2 : beforeJoker
 
   return {
     total,
     main,
     baseMain,
+    exactScore: scoreline,
+    insight: insight.bonus,
+    insightDetails: insight,
     scoreline,
-    penalty,
     jokerMultiplier: prediction.joker_used ? 2 : 1,
     correctPick: baseMain > 0,
   }
@@ -102,8 +159,10 @@ export function emptyMatchScore() {
     total: 0,
     main: 0,
     baseMain: 0,
+    exactScore: 0,
+    insight: 0,
+    insightDetails: emptyInsight(),
     scoreline: 0,
-    penalty: 0,
     jokerMultiplier: 1,
     correctPick: false,
   }
@@ -177,4 +236,8 @@ export function remainingJokers(predictions, userId) {
   const used = predictions.filter((prediction) => prediction.user_id === userId && prediction.joker_used)
     .length
   return Math.max(0, JOKER_LIMIT - used)
+}
+
+function clamp(value, min, max) {
+  return Math.max(min, Math.min(max, value))
 }

@@ -96,7 +96,7 @@ export async function savePrediction({ fixture, prediction, session, updates }) 
     pick_is_draw: prediction?.pick_is_draw || false,
     pred_goals_team1: prediction?.pred_goals_team1 ?? null,
     pred_goals_team2: prediction?.pred_goals_team2 ?? null,
-    penalty_call: prediction?.penalty_call || null,
+    penalty_call: null,
     joker_used: prediction?.joker_used || false,
     ...updates,
   }

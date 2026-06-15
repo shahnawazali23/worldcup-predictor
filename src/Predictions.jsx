@@ -35,11 +35,17 @@ function formatCountdown(ms) {
   return `${hours}h ${minutes}m ${remainingSeconds}s`
 }
 
+function isPredictionComplete(prediction = {}) {
+  const hasWinner = Boolean(prediction.picked_team_id || prediction.pick_is_draw)
+  const hasHomeScore = prediction.pred_goals_team1 != null
+  const hasAwayScore = prediction.pred_goals_team2 != null
+  return hasWinner && hasHomeScore && hasAwayScore
+}
+
 export default function Predictions({ active = true, data, onPredictionSaved, session }) {
   const [savingFixtureId, setSavingFixtureId] = useState(null)
   const [error, setError] = useState('')
   const [optimisticPredictions, setOptimisticPredictions] = useState({})
-  const [jokerOverrides, setJokerOverrides] = useState({})
   const [savedFixtureId, setSavedFixtureId] = useState(null)
   const now = useNow(active)
 
@@ -68,7 +74,7 @@ export default function Predictions({ active = true, data, onPredictionSaved, se
     return Object.fromEntries(userPredictions.map((prediction) => [prediction.fixture_id, prediction]))
   }, [userPredictions])
 
-  const jokersLeft = remainingJokers(data.predictions, session.user.id)
+  const jokersLeft = remainingJokers(userPredictions, session.user.id)
   const leaderboardRows = useMemo(() => buildLeaderboard(data), [data])
   const currentRank = leaderboardRows.findIndex((row) => row.id === session.user.id) + 1
   const currentRow = leaderboardRows.find((row) => row.id === session.user.id)
@@ -95,7 +101,7 @@ export default function Predictions({ active = true, data, onPredictionSaved, se
     .filter((fixture) => fixtureKickoffMs(fixture) > now)
     .slice()
     .sort(compareFixturesTournamentOrder)
-  async function updatePrediction(fixture, updates) {
+  function updatePrediction(fixture, updates) {
     const existing = predictionsByFixture[fixture.id]
     const kickoffMs = fixtureKickoffMs(fixture)
     const lockMs = kickoffMs - 60 * 1000
@@ -111,14 +117,7 @@ export default function Predictions({ active = true, data, onPredictionSaved, se
       return
     }
 
-    setSavingFixtureId(fixture.id)
     setError('')
-    if (Object.prototype.hasOwnProperty.call(updates, 'joker_used')) {
-      setJokerOverrides((current) => ({
-        ...current,
-        [fixture.id]: updates.joker_used,
-      }))
-    }
     setOptimisticPredictions((current) => ({
       ...current,
       [fixture.id]: {
@@ -128,9 +127,32 @@ export default function Predictions({ active = true, data, onPredictionSaved, se
         ...updates,
       },
     }))
+  }
 
+  async function saveDraftPrediction(fixture, prediction) {
+    const kickoffMs = fixtureKickoffMs(fixture)
+    const lockMs = kickoffMs - 60 * 1000
+    const locked = now >= lockMs
+
+    if (locked) {
+      setError('This match is locked because kickoff has passed.')
+      return
+    }
+
+    if (!isPredictionComplete(prediction)) {
+      setError('Pick a winner and enter both scores before saving.')
+      return
+    }
+
+    setSavingFixtureId(fixture.id)
+    setError('')
     try {
-      const savedPrediction = await savePrediction({ fixture, prediction: existing, session, updates })
+      const savedPrediction = await savePrediction({
+        fixture,
+        prediction: {},
+        session,
+        updates: prediction,
+      })
       onPredictionSaved(savedPrediction)
       setSavedFixtureId(fixture.id)
       setOptimisticPredictions((current) => {
@@ -138,27 +160,8 @@ export default function Predictions({ active = true, data, onPredictionSaved, se
         delete next[fixture.id]
         return next
       })
-      if (Object.prototype.hasOwnProperty.call(updates, 'joker_used')) {
-        setJokerOverrides((current) => {
-          const next = { ...current }
-          delete next[fixture.id]
-          return next
-        })
-      }
     } catch (saveError) {
-      setOptimisticPredictions((current) => {
-        const next = { ...current }
-        delete next[fixture.id]
-        return next
-      })
       setError(saveError.message)
-      if (Object.prototype.hasOwnProperty.call(updates, 'joker_used')) {
-        setJokerOverrides((current) => {
-          const next = { ...current }
-          delete next[fixture.id]
-          return next
-        })
-      }
     } finally {
       setSavingFixtureId(null)
     }
@@ -171,7 +174,7 @@ export default function Predictions({ active = true, data, onPredictionSaved, se
           <p className="eyebrow">Prediction League</p>
           <h2>68 Matches. 3 Jokers. One Champion.</h2>
           <p>
-            Main picks, exact scores, penalty calls and three dangerous jokers. Locks happen at
+            Winner picks, exact scores, insight bonuses and three dangerous jokers. Locks happen at
             kickoff.
           </p>
         </div>
@@ -215,12 +218,7 @@ export default function Predictions({ active = true, data, onPredictionSaved, se
           })
           const bracketLabel = fixtureMatchLabel(fixture, fixtureDisplayMeta.sequenceByFixtureId)
           const savedPrediction = predictionsByFixture[fixture.id] || {}
-          const prediction = {
-            ...savedPrediction,
-            joker_used: Object.prototype.hasOwnProperty.call(jokerOverrides, fixture.id)
-              ? jokerOverrides[fixture.id]
-              : savedPrediction.joker_used,
-          }
+          const prediction = savedPrediction
           const kickoffMs = fixtureKickoffMs(fixture)
           const lockMs = kickoffMs - 60 * 1000
           const locked = now >= lockMs
@@ -233,6 +231,10 @@ export default function Predictions({ active = true, data, onPredictionSaved, se
           const team2Points = teamsAssigned ? possibleMainPickPoints(fixture, fixture.team2_id, data.teamsById) : 0
           const drawPoints = possibleMainPickPoints(fixture, 'draw', data.teamsById)
           const potential = predictionPotential({ fixture, prediction, teamsById: data.teamsById })
+          const canSave = teamsAssigned &&
+            !locked &&
+            savingFixtureId !== fixture.id &&
+            isPredictionComplete(prediction)
 
           return (
             <article className={isFeatured ? 'fixture-card fixture-card-featured' : 'fixture-card'} key={fixture.id}>
@@ -313,7 +315,7 @@ export default function Predictions({ active = true, data, onPredictionSaved, se
 
               <div className="bonus-panel">
                 <div>
-                  <p className="section-label">Scoreline prediction (bonus)</p>
+                  <p className="section-label">Scoreline prediction (required)</p>
                 </div>
                 <div className="scoreline-row">
                   <ScoreTeamLabel team={team1} />
@@ -401,6 +403,15 @@ export default function Predictions({ active = true, data, onPredictionSaved, se
                     </span>
                   )}
                 </button>
+
+                <button
+                  className="save-prediction-button"
+                  disabled={!canSave}
+                  onClick={() => saveDraftPrediction(fixture, prediction)}
+                  type="button"
+                >
+                  {savingFixtureId === fixture.id ? 'Saving...' : 'Save Prediction'}
+                </button>
               </div>
 
               <div className="fixture-foot">
@@ -470,8 +481,8 @@ function PotentialPointsPanel({ potential, prediction }) {
       </summary>
       <div className="potential-breakdown">
         <BreakdownLine label="Winner Prediction" value={`+${potential.main}`} active={potential.hasMainPick} />
-        <BreakdownLine label="Scoreline Bonus" value={`+${potential.scoreline}`} active={potential.hasScoreline} />
-        <BreakdownLine label="Goal Difference Bonus" value={`+${potential.goalDifference}`} active={potential.hasScoreline} />
+        <BreakdownLine label="Exact Score Prediction" value={`+${potential.scoreline}`} active={potential.hasScoreline} />
+        <BreakdownLine label="Insight Bonus" value={`+${potential.insight}`} active={potential.hasScoreline} />
         {prediction?.joker_used && (
           <BreakdownLine label="🔥 Joker Active" value="x2" active joker />
         )}

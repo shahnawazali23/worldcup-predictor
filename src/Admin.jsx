@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { saveFixtureResult, saveTeam } from './data'
 import { fixtureParticipant } from './fixtureDisplay'
-import { isKnockoutFixture } from './scoring'
+import { expectedScoreForFixture, isKnockoutFixture } from './scoring'
 
 export default function Admin({ data, onRefresh }) {
   const [saving, setSaving] = useState('')
@@ -121,6 +121,9 @@ export default function Admin({ data, onRefresh }) {
             const team1 = fixtureParticipant({ fixture, side: 'home', teamsById: data.teamsById })
             const team2 = fixtureParticipant({ fixture, side: 'away', teamsById: data.teamsById })
             const knockout = isKnockoutFixture(fixture)
+            const expected = fixture.is_finished
+              ? expectedScoreForFixture(fixture, data.teamsById)
+              : null
 
             return (
               <form
@@ -133,6 +136,7 @@ export default function Admin({ data, onRefresh }) {
                     {team1.name} vs {team2.name}
                   </strong>
                   <span>{fixture.stage}</span>
+                  {expected && <span>Expected {expected.home}-{expected.away}</span>}
                 </div>
                 <input defaultValue={fixture.goals_team1 ?? ''} min="0" name="goals_team1" type="number" />
                 <input defaultValue={fixture.goals_team2 ?? ''} min="0" name="goals_team2" type="number" />
