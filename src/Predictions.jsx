@@ -50,6 +50,20 @@ function isPredictionComplete(prediction = {}) {
   return hasWinner && hasHomeScore && hasAwayScore
 }
 
+function predictionsMatch(left = {}, right = {}) {
+  if (!right) return false
+
+  return String(left.picked_team_id || '') === String(right.picked_team_id || '') &&
+    Boolean(left.pick_is_draw) === Boolean(right.pick_is_draw) &&
+    normalizeScoreInput(left.pred_goals_team1) === normalizeScoreInput(right.pred_goals_team1) &&
+    normalizeScoreInput(left.pred_goals_team2) === normalizeScoreInput(right.pred_goals_team2) &&
+    Boolean(left.joker_used) === Boolean(right.joker_used)
+}
+
+function normalizeScoreInput(value) {
+  return value == null || value === '' ? null : Number(value)
+}
+
 export default function Predictions({ active = true, data, onPredictionSaved, session }) {
   const [savingFixtureId, setSavingFixtureId] = useState(null)
   const [error, setError] = useState('')
@@ -57,26 +71,22 @@ export default function Predictions({ active = true, data, onPredictionSaved, se
   const [savedFixtureId, setSavedFixtureId] = useState(null)
   const now = useNow(active)
 
-  useEffect(() => {
-    if (!savedFixtureId) return undefined
-    const timer = setTimeout(() => setSavedFixtureId(null), 1800)
-    return () => clearTimeout(timer)
-  }, [savedFixtureId])
-
-  const userPredictions = useMemo(() => {
+  const savedPredictionsByFixture = useMemo(() => {
     const savedPredictions = data.predictions.filter(
       (prediction) => prediction.user_id === session.user.id,
     )
-    const mergedByFixture = Object.fromEntries(
-      savedPredictions.map((prediction) => [prediction.fixture_id, prediction]),
-    )
+    return Object.fromEntries(savedPredictions.map((prediction) => [prediction.fixture_id, prediction]))
+  }, [data.predictions, session.user.id])
+
+  const userPredictions = useMemo(() => {
+    const mergedByFixture = { ...savedPredictionsByFixture }
 
     Object.entries(optimisticPredictions).forEach(([fixtureId, prediction]) => {
       mergedByFixture[fixtureId] = prediction
     })
 
     return Object.values(mergedByFixture)
-  }, [data.predictions, optimisticPredictions, session.user.id])
+  }, [optimisticPredictions, savedPredictionsByFixture])
 
   const predictionsByFixture = useMemo(() => {
     return Object.fromEntries(userPredictions.map((prediction) => [prediction.fixture_id, prediction]))
@@ -98,7 +108,7 @@ export default function Predictions({ active = true, data, onPredictionSaved, se
     for (const fixture of finishedRows) {
       const prediction = predictionsByFixture[fixture.id]
       if (!prediction) break
-      const score = scoreMatch(fixture, prediction, data.teamsById)
+      const score = scoreMatch(fixture, prediction, data.teamsById, data.fixtures)
       if (!score.correctPick) break
       streak += 1
     }
@@ -215,8 +225,9 @@ export default function Predictions({ active = true, data, onPredictionSaved, se
             sequenceByFixtureId: fixtureDisplayMeta.sequenceByFixtureId,
           })
           const bracketLabel = fixtureMatchLabel(fixture, fixtureDisplayMeta.sequenceByFixtureId)
-          const savedPrediction = predictionsByFixture[fixture.id] || {}
-          const prediction = savedPrediction
+          const savedPrediction = savedPredictionsByFixture[fixture.id] || null
+          const draftPrediction = optimisticPredictions[fixture.id] || null
+          const prediction = draftPrediction || savedPrediction || {}
           const kickoffMs = fixtureKickoffMs(fixture)
           const lockMs = kickoffMs - 60 * 1000
           const locked = now >= lockMs
@@ -233,7 +244,12 @@ export default function Predictions({ active = true, data, onPredictionSaved, se
             !locked &&
             savingFixtureId !== fixture.id &&
             isPredictionComplete(prediction)
-          const justSaved = savedFixtureId === fixture.id
+          const isDirty = draftPrediction
+            ? !predictionsMatch(draftPrediction, savedPrediction)
+            : false
+          const isSaved = isPredictionComplete(prediction) &&
+            !isDirty &&
+            Boolean(savedPrediction || savedFixtureId === fixture.id)
           const fixtureContext = formatFixtureContext(fixture, bracketLabel)
 
           return (
@@ -405,12 +421,14 @@ export default function Predictions({ active = true, data, onPredictionSaved, se
                 </button>
 
                 <button
-                  className={justSaved ? 'save-prediction-button saved' : 'save-prediction-button'}
-                  disabled={!canSave || justSaved}
+                  className={isSaved ? 'save-prediction-button saved' : 'save-prediction-button'}
+                  disabled={locked || !canSave || isSaved}
                   onClick={() => saveDraftPrediction(fixture, prediction)}
                   type="button"
                 >
-                  {justSaved
+                  {locked
+                    ? '🔒 Predictions Locked'
+                    : isSaved
                     ? '✓ Prediction Saved'
                     : savingFixtureId === fixture.id
                       ? 'Saving...'
@@ -433,7 +451,7 @@ export default function Predictions({ active = true, data, onPredictionSaved, se
                         ? `Picked: ${team2.name}`
                         : 'No pick yet'}
                 </strong>
-                {justSaved && <em className="saved-badge">✓ Prediction Saved</em>}
+                {isSaved && <em className="saved-badge">✓ Prediction Saved</em>}
               </div>
             </article>
           )

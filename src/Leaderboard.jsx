@@ -127,7 +127,7 @@ function buildLeaderboardView(data, currentUserId) {
     analytics.predictionsMade += 1
     if (!fixture.is_finished) return
 
-    const score = scoreMatch(fixture, prediction, data.teamsById)
+    const score = scoreMatch(fixture, prediction, data.teamsById, data.fixtures)
     analytics.finishedPicks += 1
     if (score.correctPick) analytics.correctPicks += 1
     if (!score.correctPick) analytics.wrongPicks += 1
@@ -169,7 +169,7 @@ function logFinishedPredictionDebug(data, fixturesById) {
       const fixture = fixturesById[prediction.fixture_id]
       if (!fixture?.is_finished) return null
 
-      const score = scoreMatch(fixture, prediction, data.teamsById)
+      const score = scoreMatch(fixture, prediction, data.teamsById, data.fixtures)
       const actualWinnerId = winnerIdFromFixture(fixture)
       const pickedTeam = prediction.pick_is_draw ? null : data.teamsById[prediction.picked_team_id]
       const actualWinner = actualWinnerId === 'draw'

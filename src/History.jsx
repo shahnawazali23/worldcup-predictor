@@ -20,7 +20,7 @@ function History({ data, session }) {
       .map((fixture) => {
         const prediction = predictionsByFixture[fixture.id]
         const score = fixture.is_finished && prediction
-          ? scoreMatch(fixture, prediction, data.teamsById)
+          ? scoreMatch(fixture, prediction, data.teamsById, data.fixtures)
           : null
         return {
           fixture,

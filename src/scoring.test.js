@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import {
   buildLeaderboard,
+  calculateInsightBonus,
   remainingJokers,
   roundMultiplier,
   scoreMatch,
@@ -34,7 +35,7 @@ assert.equal(
     pred_goals_team1: 1,
     pred_goals_team2: 2,
   }, teamsById).total,
-  8,
+  7,
 )
 assert.equal(
   scoreMatch(groupFixture, {
@@ -42,7 +43,7 @@ assert.equal(
     pred_goals_team1: 0,
     pred_goals_team2: 1,
   }, teamsById).total,
-  4,
+  3,
 )
 assert.equal(
   scoreMatch(groupFixture, {
@@ -50,7 +51,7 @@ assert.equal(
     pred_goals_team1: 3,
     pred_goals_team2: 1,
   }, teamsById).total,
-  3,
+  2,
 )
 
 const insightFixture = {
@@ -70,12 +71,26 @@ assert.equal(
   8,
 )
 assert.equal(
+  calculateInsightBonus(insightFixture, {
+    pred_goals_team1: 5,
+    pred_goals_team2: 1,
+  }, teamsById).bonus,
+  2,
+)
+assert.equal(
   scoreMatch(insightFixture, {
     picked_team_id: 'favorite',
     pred_goals_team1: 4,
     pred_goals_team2: 1,
   }, teamsById).total,
-  5,
+  4,
+)
+assert.equal(
+  calculateInsightBonus(insightFixture, {
+    pred_goals_team1: 4,
+    pred_goals_team2: 1,
+  }, teamsById).bonus,
+  1,
 )
 assert.equal(
   scoreMatch(insightFixture, {
@@ -83,7 +98,7 @@ assert.equal(
     pred_goals_team1: 2,
     pred_goals_team2: 0,
   }, teamsById).total,
-  3,
+  2,
 )
 assert.equal(
   scoreMatch(insightFixture, {
@@ -91,6 +106,13 @@ assert.equal(
     pred_goals_team1: 0,
     pred_goals_team2: 1,
   }, teamsById).total,
+  -1,
+)
+assert.equal(
+  calculateInsightBonus(insightFixture, {
+    pred_goals_team1: 0,
+    pred_goals_team2: 1,
+  }, teamsById).bonus,
   -1,
 )
 assert.equal(
@@ -128,7 +150,7 @@ assert.equal(
     pred_goals_team1: 2,
     pred_goals_team2: 0,
   }, teamsById).total,
-  3,
+  2,
 )
 assert.equal(
   scoreMatch(canonicalIdentityFixture, {
@@ -136,7 +158,7 @@ assert.equal(
     pred_goals_team1: 3,
     pred_goals_team2: 0,
   }, teamsById).total,
-  4,
+  3,
 )
 
 const drawnFixture = {

@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { saveFixtureResult, saveTeam } from './data'
 import { fixtureParticipant } from './fixtureDisplay'
-import { expectedScoreForFixture, isKnockoutFixture } from './scoring'
+import { calculateInsightBonus, expectedScoreForFixture, isKnockoutFixture } from './scoring'
 
 export default function Admin({ data, onRefresh }) {
   const [saving, setSaving] = useState('')
@@ -12,6 +12,12 @@ export default function Admin({ data, onRefresh }) {
   const unresolved = useMemo(() => {
     return data.fixtures.filter((fixture) => fixture.is_finished && !fixture.result_confirmed)
   }, [data.fixtures])
+  const insightDebugRows = useMemo(() => {
+    return buildInsightDebugRows(data)
+  }, [data])
+  const expectedValidation = useMemo(() => {
+    return buildExpectedValidation(data)
+  }, [data])
 
   async function updateFixture(fixture, formData) {
     const goals1 = toNullableNumber(formData.get('goals_team1'))
@@ -122,7 +128,7 @@ export default function Admin({ data, onRefresh }) {
             const team2 = fixtureParticipant({ fixture, side: 'away', teamsById: data.teamsById })
             const knockout = isKnockoutFixture(fixture)
             const expected = fixture.is_finished
-              ? expectedScoreForFixture(fixture, data.teamsById)
+              ? expectedScoreForFixture(fixture, data.teamsById, data.fixtures)
               : null
 
             return (
@@ -183,10 +189,182 @@ export default function Admin({ data, onRefresh }) {
           })}
         </div>
       </section>
+
+      <section className="panel">
+        <h3>Expected Score Validation</h3>
+        <p className="muted">
+          Completed fixtures only, sorted by largest model error. Use this before enabling Insight
+          Bonus.
+        </p>
+        <div className="model-error-summary">
+          <div>
+            <span>Average Model Error</span>
+            <strong>{formatDecimal(expectedValidation.averageError)}</strong>
+          </div>
+          <div>
+            <span>Median Model Error</span>
+            <strong>{formatDecimal(expectedValidation.medianError)}</strong>
+          </div>
+        </div>
+        <div className="insight-debug-table-wrap">
+          <table className="insight-debug-table">
+            <thead>
+              <tr>
+                <th>Fixture</th>
+                <th>Expected Score</th>
+                <th>Actual Score</th>
+                <th>Model Error</th>
+              </tr>
+            </thead>
+            <tbody>
+              {expectedValidation.rows.map((row) => (
+                <tr key={row.fixtureId}>
+                  <td>{row.fixture}</td>
+                  <td>{row.expected}</td>
+                  <td>{row.actual}</td>
+                  <td>{row.modelError}</td>
+                </tr>
+              ))}
+              {expectedValidation.rows.length === 0 && (
+                <tr>
+                  <td colSpan="4">No completed fixtures yet.</td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section className="panel">
+        <h3>Insight Debug</h3>
+        <p className="muted">
+          Admin-only audit for completed predictions. Expected scores are hidden from players until
+          matches are complete.
+        </p>
+        <div className="insight-debug-table-wrap">
+          <table className="insight-debug-table">
+            <thead>
+              <tr>
+                <th>Fixture</th>
+                <th>Player</th>
+                <th>Expected</th>
+                <th>Actual</th>
+                <th>Prediction</th>
+                <th>Model Error</th>
+                <th>Prediction Error</th>
+                <th>Insight Score</th>
+                <th>Bonus</th>
+              </tr>
+            </thead>
+            <tbody>
+              {insightDebugRows.map((row) => (
+                <tr key={`${row.fixtureId}-${row.predictionId}`}>
+                  <td>{row.fixture}</td>
+                  <td>{row.player}</td>
+                  <td>{row.expected}</td>
+                  <td>{row.actual}</td>
+                  <td>{row.prediction}</td>
+                  <td>{row.modelError}</td>
+                  <td>{row.predictionError}</td>
+                  <td>{row.insightScore}</td>
+                  <td>{formatSigned(row.bonus)}</td>
+                </tr>
+              ))}
+              {insightDebugRows.length === 0 && (
+                <tr>
+                  <td colSpan="9">No completed scoreline predictions yet.</td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </section>
     </section>
   )
 }
 
 function toNullableNumber(value) {
   return value === '' || value == null ? null : Number(value)
+}
+
+function buildInsightDebugRows(data) {
+  const fixturesById = Object.fromEntries(data.fixtures.map((fixture) => [fixture.id, fixture]))
+  const profilesById = Object.fromEntries(data.profiles.map((profile) => [profile.id, profile]))
+
+  return data.predictions
+    .map((prediction) => {
+      const fixture = fixturesById[prediction.fixture_id]
+      if (!fixture?.is_finished) return null
+      if (prediction.pred_goals_team1 == null || prediction.pred_goals_team2 == null) return null
+
+      const expected = expectedScoreForFixture(fixture, data.teamsById, data.fixtures)
+      const insight = calculateInsightBonus(fixture, prediction, data.teamsById, data.fixtures)
+      const profile = profilesById[prediction.user_id]
+
+      return {
+        actual: `${fixture.goals_team1}-${fixture.goals_team2}`,
+        bonus: insight.bonus,
+        expected: `${expected.home}-${expected.away}`,
+        fixture: `${fixture.home_team} vs ${fixture.away_team}`,
+        fixtureId: fixture.id,
+        insightScore: insight.insightScore,
+        modelError: insight.modelError,
+        player: profile?.display_name || profile?.email || prediction.user_id,
+        prediction: `${prediction.pred_goals_team1}-${prediction.pred_goals_team2}`,
+        predictionError: insight.predictionError,
+        predictionId: prediction.id,
+      }
+    })
+    .filter(Boolean)
+    .sort((a, b) => a.fixture.localeCompare(b.fixture) || a.player.localeCompare(b.player))
+}
+
+function buildExpectedValidation(data) {
+  const rows = data.fixtures
+    .filter((fixture) => fixture.is_finished && fixture.goals_team1 != null && fixture.goals_team2 != null)
+    .map((fixture) => {
+      const expected = expectedScoreForFixture(fixture, data.teamsById, data.fixtures)
+      const modelError = Math.abs(expected.home - fixture.goals_team1) +
+        Math.abs(expected.away - fixture.goals_team2)
+
+      return {
+        actual: `${fixture.goals_team1}-${fixture.goals_team2}`,
+        expected: `${expected.home}-${expected.away}`,
+        fixture: `${fixture.home_team} vs ${fixture.away_team}`,
+        fixtureId: fixture.id,
+        modelError,
+      }
+    })
+    .sort((a, b) => b.modelError - a.modelError || a.fixture.localeCompare(b.fixture))
+
+  return {
+    averageError: average(rows.map((row) => row.modelError)),
+    medianError: median(rows.map((row) => row.modelError)),
+    rows,
+  }
+}
+
+function formatSigned(value) {
+  return `${value >= 0 ? '+' : ''}${value}`
+}
+
+function average(values) {
+  if (values.length === 0) return null
+  return values.reduce((total, value) => total + value, 0) / values.length
+}
+
+function median(values) {
+  if (values.length === 0) return null
+
+  const sorted = values.slice().sort((a, b) => a - b)
+  const middle = Math.floor(sorted.length / 2)
+
+  return sorted.length % 2 === 0
+    ? (sorted[middle - 1] + sorted[middle]) / 2
+    : sorted[middle]
+}
+
+function formatDecimal(value) {
+  if (value == null) return '-'
+  return Number.isInteger(value) ? String(value) : value.toFixed(2)
 }

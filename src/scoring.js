@@ -70,18 +70,27 @@ export function scorelineBonus(fixture, prediction) {
   return 0
 }
 
-export function expectedScoreForFixture(fixture, teamsById) {
+export function expectedScoreForFixture(fixture, teamsById, fixtures = []) {
   const homeTeam = teamsById[fixture.team1_id]
   const awayTeam = teamsById[fixture.team2_id]
   const homeRank = rankForTeam(homeTeam, teamsById)
   const awayRank = rankForTeam(awayTeam, teamsById)
-  const rankEdge = clamp((awayRank - homeRank) / 35, -0.9, 0.9)
-  const homeGoals = clamp(Math.round(1.35 + 0.18 + rankEdge), 0, 5)
-  const awayGoals = clamp(Math.round(1.15 - rankEdge), 0, 5)
+  const form = buildPreMatchForm(fixture, fixtures, teamsById)
+  const homeForm = formByTeam(homeTeam, form)
+  const awayForm = formByTeam(awayTeam, form)
+  const rankEdge = clamp((awayRank - homeRank) / 70, -1.1, 1.1)
+  const homeAttackAdjustment = formAdjustment(homeForm.attack, awayForm.defense)
+  const awayAttackAdjustment = formAdjustment(awayForm.attack, homeForm.defense)
+  const homeXg = clamp(1.35 + 0.18 + rankEdge * 1.15 + homeAttackAdjustment, 0.15, 4.8)
+  const awayXg = clamp(1.1 - rankEdge * 0.9 + awayAttackAdjustment, 0.1, 4.5)
+  const homeGoals = clamp(Math.round(homeXg), 0, 5)
+  const awayGoals = clamp(Math.round(awayXg), 0, 5)
 
   return {
     away: awayGoals,
+    awayXg,
     home: homeGoals,
+    homeXg,
   }
 }
 
@@ -100,12 +109,85 @@ function rankForTeam(team, teamsById) {
   return Number.isFinite(rank) && rank > 0 && rank < 999 ? rank : 50
 }
 
-export function insightBonus(fixture, prediction, teamsById) {
+function buildPreMatchForm(targetFixture, fixtures, teamsById) {
+  const targetKickoff = fixtureTimeMs(targetFixture)
+  const completedBeforeKickoff = fixtures.filter((fixture) => {
+    const kickoff = fixtureTimeMs(fixture)
+
+    return fixture.id !== targetFixture.id &&
+      fixture.is_finished &&
+      fixture.goals_team1 != null &&
+      fixture.goals_team2 != null &&
+      fixture.team1_id &&
+      fixture.team2_id &&
+      kickoff > 0 &&
+      kickoff < targetKickoff
+  })
+  const stats = new Map()
+  const totalGoals = completedBeforeKickoff.reduce(
+    (total, fixture) => total + fixture.goals_team1 + fixture.goals_team2,
+    0,
+  )
+  const globalAvgGoals = completedBeforeKickoff.length
+    ? totalGoals / (completedBeforeKickoff.length * 2)
+    : 1.2
+
+  completedBeforeKickoff.forEach((fixture) => {
+    addTeamMatch(stats, teamsById[fixture.team1_id], fixture.goals_team1, fixture.goals_team2)
+    addTeamMatch(stats, teamsById[fixture.team2_id], fixture.goals_team2, fixture.goals_team1)
+  })
+
+  return { globalAvgGoals, stats }
+}
+
+function addTeamMatch(stats, team, goalsFor, goalsAgainst) {
+  const key = teamKey(team)
+  if (!key) return
+
+  const current = stats.get(key) || { goalsAgainst: 0, goalsFor: 0, matches: 0 }
+  current.goalsFor += goalsFor
+  current.goalsAgainst += goalsAgainst
+  current.matches += 1
+  stats.set(key, current)
+}
+
+function formByTeam(team, form) {
+  const stats = form.stats.get(teamKey(team))
+  if (!stats?.matches) return { attack: 0, defense: 0 }
+
+  const sampleWeight = Math.min(stats.matches / 3, 1)
+  const baseline = Math.max(form.globalAvgGoals, 0.75)
+  const avgFor = stats.goalsFor / stats.matches
+  const avgAgainst = stats.goalsAgainst / stats.matches
+
+  return {
+    attack: clamp(((avgFor / baseline) - 1) * sampleWeight, -0.8, 0.8),
+    defense: clamp(((avgAgainst / baseline) - 1) * sampleWeight, -0.8, 0.8),
+  }
+}
+
+function formAdjustment(attack, opposingDefense) {
+  return clamp((attack + opposingDefense) * 0.55, -0.8, 0.8)
+}
+
+function teamKey(team) {
+  return team ? canonicalTeamName(team.name) : ''
+}
+
+function fixtureTimeMs(fixture) {
+  return new Date(fixture.kickoff_time_utc || fixture.kickoff_at || fixture.match_date || 0).getTime()
+}
+
+export function insightBonus(fixture, prediction, teamsById, fixtures = []) {
   if (!INSIGHT_BONUS_ENABLED) return emptyInsight()
+  return calculateInsightBonus(fixture, prediction, teamsById, fixtures)
+}
+
+export function calculateInsightBonus(fixture, prediction, teamsById, fixtures = []) {
   if (prediction.pred_goals_team1 == null || prediction.pred_goals_team2 == null) return emptyInsight()
   if (fixture.goals_team1 == null || fixture.goals_team2 == null) return emptyInsight()
 
-  const expected = expectedScoreForFixture(fixture, teamsById)
+  const expected = expectedScoreForFixture(fixture, teamsById, fixtures)
   const modelError = Math.abs(expected.home - fixture.goals_team1) +
     Math.abs(expected.away - fixture.goals_team2)
   const predictionError = Math.abs(prediction.pred_goals_team1 - fixture.goals_team1) +
@@ -131,13 +213,15 @@ function emptyInsight() {
   }
 }
 
-export function scoreMatch(fixture, prediction, teamsById) {
+export function scoreMatch(fixture, prediction, teamsById, fixtures = []) {
   if (!fixture?.is_finished || !prediction) return emptyMatchScore()
 
   const baseMain = mainPickBasePoints(fixture, prediction, teamsById)
   const main = baseMain
   const scoreline = scorelineBonus(fixture, prediction)
-  const insight = insightBonus(fixture, prediction, teamsById)
+  const insight = INSIGHT_BONUS_ENABLED
+    ? calculateInsightBonus(fixture, prediction, teamsById, fixtures)
+    : emptyInsight()
   const beforeJoker = main + scoreline + insight.bonus
   const total = prediction.joker_used ? beforeJoker * 2 : beforeJoker
 
@@ -198,7 +282,7 @@ export function buildLeaderboard({ fixtures, predictions, profiles, teamsById })
       if (prediction.joker_used) row.jokersUsed += 1
       if (!fixture.is_finished) return
 
-      const score = scoreMatch(fixture, prediction, teamsById)
+      const score = scoreMatch(fixture, prediction, teamsById, fixtures)
       row.points += score.total
       row.matchScores[fixture.id] = {
         points: score.total,
