@@ -1,5 +1,6 @@
 import { memo, useMemo, useState } from 'react'
-import { buildFixtureDisplayMeta, compareFixturesTournamentOrder, fixtureParticipant } from './fixtureDisplay'
+import { buildFixtureDisplayMeta, compareFixturesTournamentOrder, fixtureParticipant, formatStageName } from './fixtureDisplay'
+import Icon from './Icon'
 import { scoreMatch } from './scoring'
 import TeamFlag from './TeamFlag'
 import { fixtureKickoffDate, fixtureKickoffMs } from './time'
@@ -37,10 +38,10 @@ function History({ data, session }) {
   return (
     <section className="screen-stack">
       <div className="history-stat-cards">
-        <SummaryCard label="Total Points" icon="🏆" value={summary.totalPoints} />
-        <SummaryCard label="Accuracy" icon="🎯" value={`${summary.accuracy.toFixed(0)}%`} />
-        <SummaryCard label="Current Streak" icon="🔥" value={summary.currentStreak} />
-        <SummaryCard label="Current Rank" icon="👑" value={summary.rankTitle.label} title={summary.rankTitle.description} />
+        <SummaryCard label="Total Points" icon="trophy" value={summary.totalPoints} />
+        <SummaryCard label="Accuracy" icon="target" value={`${summary.accuracy.toFixed(0)}%`} />
+        <SummaryCard label="Current Streak" icon="trendingUp" value={summary.currentStreak} />
+        <SummaryCard label="Current Rank" icon={summary.rankTitle.icon} value={summary.rankTitle.label} title={summary.rankTitle.description} />
       </div>
 
       <div className="history-list">
@@ -74,7 +75,7 @@ function History({ data, session }) {
           return (
             <article className="history-row" key={fixture.id}>
               <div className="history-match">
-                <span>{fixture.stage}</span>
+                <span>{formatStageName(fixture.stage)}</span>
                 <div className="history-fixture-teams">
                   <TeamNameWithFlag team={team1} />
                   <b>vs</b>
@@ -145,7 +146,9 @@ function History({ data, session }) {
 
       {rows.length === 0 && (
         <div className="panel empty-state">
-          No history yet. Once matches pass kickoff, your locked predictions will appear here.
+          <Icon name="clock" size={20} />
+          <strong>No history yet</strong>
+          <span>Locked predictions will appear here once matches are complete.</span>
         </div>
       )}
     </section>
@@ -155,7 +158,10 @@ function History({ data, session }) {
 function SummaryCard({ icon, label, title, value }) {
   return (
     <div className="history-stat-card" title={title}>
-      <span>{icon} {label}</span>
+      <span>
+        <Icon name={icon} size={16} />
+        {label}
+      </span>
       <strong>{value}</strong>
     </div>
   )
@@ -299,34 +305,39 @@ function insightExplanationFor({ fixture, prediction, score, team1, team2 }) {
 function rankTitleFor({ accuracy, exactScores, finishedPicks }) {
   if (finishedPicks >= 50 && accuracy >= 70 && exactScores >= 3) {
     return {
-      label: '👑 Oracle',
+      icon: 'spark',
+      label: 'Oracle',
       description: 'Unlocked with 50 completed result predictions, 70% accuracy, and 3 exact scores.',
     }
   }
 
   if (finishedPicks >= 35 && accuracy >= 65) {
     return {
-      label: '🏆 World Cup Master',
+      icon: 'trophy',
+      label: 'World Cup Master',
       description: 'Unlocked with 35 completed result predictions and 65% accuracy.',
     }
   }
 
   if (finishedPicks >= 20 && accuracy >= 60) {
     return {
-      label: '🎯 Tournament Expert',
+      icon: 'target',
+      label: 'Tournament Expert',
       description: 'Unlocked with 20 completed result predictions and 60% accuracy.',
     }
   }
 
   if (finishedPicks >= 10 && accuracy >= 50) {
     return {
-      label: '⚽ Match Analyst',
+      icon: 'activity',
+      label: 'Match Analyst',
       description: 'Unlocked with 10 completed result predictions and 50% accuracy.',
     }
   }
 
   return {
-    label: '🌱 Rookie Predictor',
+    icon: 'medal',
+    label: 'Rookie Predictor',
     description: 'Default title for every player.',
   }
 }

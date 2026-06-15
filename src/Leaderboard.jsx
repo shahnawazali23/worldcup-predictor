@@ -1,4 +1,5 @@
 import { memo, useMemo } from 'react'
+import Icon from './Icon'
 import { buildLeaderboard, scoreMatch, winnerIdFromFixture } from './scoring'
 import { fixtureKickoffMs } from './time'
 
@@ -59,7 +60,10 @@ function Leaderboard({ data, session }) {
                 key={row.id}
               >
                 <td data-label="Rank">
-                  <strong className="table-rank">#{index + 1}</strong>
+                  <strong className="table-rank">
+                    {index === 0 && <Icon name="trophy" size={16} />}
+                    #{index + 1}
+                  </strong>
                 </td>
                 <td data-label="Player">
                   <div className="table-player">
@@ -71,6 +75,7 @@ function Leaderboard({ data, session }) {
                     <div className="table-player-copy">
                       <strong>{row.name}</strong>
                       <span className="rank-title" title={row.rankTitle.description}>
+                        <Icon name={row.rankTitle.icon} size={14} />
                         {row.rankTitle.label}
                       </span>
                     </div>
@@ -91,7 +96,13 @@ function Leaderboard({ data, session }) {
         </table>
       </div>
 
-      {rows.length === 0 && <div className="panel empty-state">No players yet.</div>}
+      {rows.length === 0 && (
+        <div className="panel empty-state">
+          <Icon name="users" size={20} />
+          <strong>No players yet</strong>
+          <span>The table will appear when players join the league.</span>
+        </div>
+      )}
     </section>
   )
 }
@@ -243,34 +254,39 @@ function initialFor(name) {
 function rankTitleFor({ accuracy, exactScores, finishedPicks }) {
   if (finishedPicks >= 50 && accuracy >= 70 && exactScores >= 3) {
     return {
-      label: '👑 Oracle',
+      icon: 'spark',
+      label: 'Oracle',
       description: 'Unlocked with 50 completed result predictions, 70% accuracy, and 3 exact scores.',
     }
   }
 
   if (finishedPicks >= 35 && accuracy >= 65) {
     return {
-      label: '🏆 World Cup Master',
+      icon: 'trophy',
+      label: 'World Cup Master',
       description: 'Unlocked with 35 completed result predictions and 65% accuracy.',
     }
   }
 
   if (finishedPicks >= 20 && accuracy >= 60) {
     return {
-      label: '🎯 Tournament Expert',
+      icon: 'target',
+      label: 'Tournament Expert',
       description: 'Unlocked with 20 completed result predictions and 60% accuracy.',
     }
   }
 
   if (finishedPicks >= 10 && accuracy >= 50) {
     return {
-      label: '⚽ Match Analyst',
+      icon: 'activity',
+      label: 'Match Analyst',
       description: 'Unlocked with 10 completed result predictions and 50% accuracy.',
     }
   }
 
   return {
-    label: '🌱 Rookie Predictor',
+    icon: 'medal',
+    label: 'Rookie Predictor',
     description: 'Default title for every player.',
   }
 }

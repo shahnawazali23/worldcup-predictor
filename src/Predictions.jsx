@@ -4,10 +4,12 @@ import {
   buildFixtureDisplayMeta,
   compareFixturesTournamentOrder,
   formatGroupName,
+  formatStageName,
   fixtureMatchLabel,
   fixtureParticipant,
   hasAssignedTeams,
 } from './fixtureDisplay'
+import Icon from './Icon'
 import { possibleMainPickPoints, predictionPotential } from './predictionPreview'
 import { buildLeaderboard, isKnockoutFixture, remainingJokers, scoreMatch } from './scoring'
 import TeamFlag from './TeamFlag'
@@ -258,9 +260,9 @@ export default function Predictions({ active = true, data, onPredictionSaved, se
                 <div>
                   {isFeatured && <p className="live-label">Next match</p>}
                   <p className="fixture-stage">
-                    {bracketLabel || fixture.stage}
+                    {bracketLabel || formatStageName(fixture.stage)}
                   </p>
-                  {bracketLabel && <p className="fixture-stage-detail">{fixture.stage}</p>}
+                  {bracketLabel && <p className="fixture-stage-detail">{formatStageName(fixture.stage)}</p>}
                   <time>
                     {fixtureKickoffDate(fixture).toLocaleString(undefined, {
                       weekday: 'short',
@@ -399,16 +401,13 @@ export default function Predictions({ active = true, data, onPredictionSaved, se
                   type="button"
                 >
                   <span className="joker-card" aria-hidden="true">
-                    <img
-                      alt=""
-                      onError={(event) => {
-                        event.currentTarget.hidden = true
-                      }}
-                      src="/joker-card.jpg"
-                    />
+                    <Icon name="flame" size={18} />
                   </span>
                   <span>
-                    <strong>{prediction.joker_used ? '🔥 Joker Active (x2)' : 'Play Joker'}</strong>
+                    <strong>
+                      {prediction.joker_used && <Icon name="flame" size={16} />}
+                      {prediction.joker_used ? 'Joker Active (x2)' : 'Play Joker'}
+                    </strong>
                     <small>
                       {prediction.joker_used ? 'Doubles fixture points' : `${jokersLeft} jokers left`}
                     </small>
@@ -427,9 +426,19 @@ export default function Predictions({ active = true, data, onPredictionSaved, se
                   type="button"
                 >
                   {locked
-                    ? '🔒 Predictions Locked'
+                    ? (
+                        <>
+                          <Icon name="lock" size={16} />
+                          Locked
+                        </>
+                      )
                     : isSaved
-                    ? '✓ Saved'
+                    ? (
+                        <>
+                          <Icon name="check" size={16} />
+                          Saved
+                        </>
+                      )
                     : savingFixtureId === fixture.id
                       ? 'Saving...'
                       : 'Save'}
@@ -451,7 +460,12 @@ export default function Predictions({ active = true, data, onPredictionSaved, se
                         ? `Picked: ${team2.name}`
                         : 'No pick yet'}
                 </strong>
-                {isSaved && <em className="saved-badge">✓ Saved</em>}
+                {isSaved && (
+                  <em className="saved-badge">
+                    <Icon name="check" size={14} />
+                    Saved
+                  </em>
+                )}
               </div>
             </article>
           )
@@ -460,7 +474,9 @@ export default function Predictions({ active = true, data, onPredictionSaved, se
 
       {visibleFixtures.length === 0 && (
         <div className="panel empty-state">
-          No upcoming fixtures. Past matches are now in History.
+          <Icon name="calendar" size={20} />
+          <strong>No upcoming fixtures</strong>
+          <span>Past matches are available in History.</span>
         </div>
       )}
     </section>
@@ -506,7 +522,7 @@ function PotentialPointsPanel({ potential, prediction }) {
         <BreakdownLine label="Exact Score" value={`+${potential.scoreline}`} active={potential.hasScoreline} />
         <BreakdownLine label="Insight Bonus" value={`+${potential.insight}`} active={potential.hasScoreline} />
         {prediction?.joker_used && (
-          <BreakdownLine label="🔥 Joker Active" value="x2" active joker />
+          <BreakdownLine icon="flame" label="Joker Active" value="x2" active joker />
         )}
         <BreakdownLine label="Maximum Available" value={`+${potential.maximum}`} active />
       </div>
@@ -514,10 +530,13 @@ function PotentialPointsPanel({ potential, prediction }) {
   )
 }
 
-function BreakdownLine({ active, joker = false, label, value }) {
+function BreakdownLine({ active, icon, joker = false, label, value }) {
   return (
     <div className={active ? 'breakdown-line active' : 'breakdown-line'}>
-      <span>{label}</span>
+      <span>
+        {icon && <Icon name={icon} size={14} />}
+        {label}
+      </span>
       <strong className={joker && active ? 'joker-value' : ''}>{value}</strong>
     </div>
   )

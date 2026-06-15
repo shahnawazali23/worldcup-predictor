@@ -85,6 +85,16 @@ export function formatGroupName(groupName = '') {
     .replace(/\b\w/g, (letter) => letter.toUpperCase())
 }
 
+export function formatStageName(stage = '') {
+  const value = String(stage || '').trim()
+  if (!value) return 'Fixture'
+
+  return value
+    .toLowerCase()
+    .replace(/[_-]+/g, ' ')
+    .replace(/\b\w/g, (letter) => letter.toUpperCase())
+}
+
 function bracketParticipantLabel(fixture, side, sequenceByFixtureId) {
   const sideLabel = side === 'home' ? 'Home' : 'Away'
   const stage = stageLabel(fixture)
@@ -137,7 +147,7 @@ function stageLabel(fixture) {
   if (stage === 'qf') return 'Quarter Final'
   if (stage === 'semi') return 'Semi Final'
   if (stage === 'final') return 'Final'
-  return fixture.stage || 'Fixture'
+  return formatStageName(fixture.stage)
 }
 
 function stageOrder(fixture) {

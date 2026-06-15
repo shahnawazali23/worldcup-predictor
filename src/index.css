@@ -2772,3 +2772,170 @@ select:disabled {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
+
+/* Premium UI polish overrides */
+.app-icon {
+  display: inline-block;
+  flex: 0 0 auto;
+  vertical-align: -0.15em;
+}
+
+.nav-tab,
+.save-prediction-button,
+.joker strong,
+.saved-badge,
+.rank-title,
+.table-rank,
+.history-stat-card span,
+.breakdown-line span {
+  display: inline-flex;
+  align-items: center;
+}
+
+.nav-tab,
+.save-prediction-button {
+  justify-content: center;
+}
+
+.nav-tab,
+.save-prediction-button,
+.saved-badge,
+.rank-title,
+.table-rank,
+.history-stat-card span,
+.breakdown-line span,
+.joker strong {
+  gap: 6px;
+}
+
+.fixture-card,
+.panel,
+.rule-card,
+.history-row,
+.points-table-wrap,
+.competition-summary-card,
+.history-stat-card,
+.prediction-summary-strip div {
+  box-shadow: 0 12px 30px rgba(16, 42, 67, 0.08);
+}
+
+.team-pick,
+.draw-pick,
+.choice,
+.joker,
+.save-prediction-button,
+.nav-tab {
+  transition:
+    background 0.18s ease,
+    border-color 0.18s ease,
+    box-shadow 0.18s ease,
+    color 0.18s ease,
+    transform 0.18s ease;
+}
+
+.team-pick:hover:not(:disabled),
+.draw-pick:hover:not(:disabled),
+.choice:hover:not(:disabled),
+.joker:hover:not(:disabled),
+.save-prediction-button:hover:not(:disabled) {
+  transform: translateY(-1px);
+}
+
+.save-prediction-button {
+  min-height: 44px;
+  padding: 0 18px;
+  border: 0;
+  border-radius: 999px;
+  color: #ffffff;
+  background: var(--navy);
+  font-weight: 900;
+  box-shadow: 0 10px 22px rgba(16, 42, 67, 0.16);
+}
+
+.save-prediction-button:hover:not(:disabled) {
+  background: var(--navy-soft);
+  box-shadow: 0 12px 26px rgba(16, 42, 67, 0.2);
+}
+
+.save-prediction-button.saved,
+.save-prediction-button.saved:disabled {
+  color: #ffffff;
+  background: var(--success);
+  box-shadow: none;
+  opacity: 1;
+}
+
+.potential-panel summary::after {
+  content: "";
+  width: 8px;
+  height: 8px;
+  border-right: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  color: var(--gold-dark);
+  transform: rotate(45deg);
+  transition: transform 0.18s ease;
+}
+
+.potential-panel[open] summary::after {
+  transform: rotate(225deg);
+}
+
+.empty-state {
+  display: grid;
+  gap: 8px;
+  justify-items: center;
+  padding: 28px 20px;
+  border: 1px solid rgba(16, 42, 67, 0.1);
+  border-radius: 8px;
+  color: var(--muted);
+  background: #ffffff;
+  text-align: center;
+}
+
+.empty-state .app-icon {
+  color: var(--gold-dark);
+}
+
+.empty-state strong {
+  color: var(--navy);
+  font-size: 1rem;
+  font-weight: 900;
+}
+
+.empty-state span {
+  max-width: 32rem;
+  color: var(--muted);
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
+.rank-title {
+  max-width: 100%;
+}
+
+.rank-title .app-icon,
+.table-rank .app-icon {
+  color: var(--gold-dark);
+}
+
+.history-stat-card span {
+  display: flex;
+}
+
+.saved-badge {
+  color: #064e3b;
+  background: #dff8eb;
+  letter-spacing: 0.02em;
+}
+
+.joker-card {
+  display: inline-grid;
+  place-items: center;
+  color: var(--gold-dark);
+  background: #fff8e8;
+}
+
+.joker.active .joker-card {
+  color: #221804;
+  background: var(--gold);
+}

@@ -7,13 +7,14 @@ import Login from './Login'
 import Predictions from './Predictions'
 import Rules from './Rules'
 import { loadLeagueData } from './data'
+import Icon from './Icon'
 
 const navItems = [
-  { id: 'predictions', label: 'Predictions' },
-  { id: 'history', label: 'History' },
-  { id: 'leaderboard', label: 'Leaderboard' },
-  { id: 'rules', label: 'Rules' },
-  { id: 'admin', label: 'Admin' },
+  { icon: 'target', id: 'predictions', label: 'Predictions' },
+  { icon: 'clock', id: 'history', label: 'History' },
+  { icon: 'trophy', id: 'leaderboard', label: 'Leaderboard' },
+  { icon: 'spark', id: 'rules', label: 'Rules' },
+  { icon: 'activity', id: 'admin', label: 'Admin' },
 ]
 
 export default function App() {
@@ -141,6 +142,7 @@ export default function App() {
                 onClick={() => switchPage(item.id)}
                 type="button"
               >
+                <Icon name={item.icon} size={16} />
                 {item.label}
               </button>
             ))}
