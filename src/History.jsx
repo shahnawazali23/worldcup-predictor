@@ -1,6 +1,6 @@
 import { memo, useMemo, useState } from 'react'
 import { buildFixtureDisplayMeta, compareFixturesTournamentOrder, fixtureParticipant } from './fixtureDisplay'
-import { isKnockoutFixture, scoreMatch } from './scoring'
+import { scoreMatch } from './scoring'
 import TeamFlag from './TeamFlag'
 import { fixtureKickoffDate, fixtureKickoffMs } from './time'
 
@@ -62,9 +62,10 @@ function History({ data, session }) {
             ? null
             : data.teamsById[prediction.picked_team_id]
           const predictedScore = formatPredictedScore(prediction)
-          const knockout = isKnockoutFixture(fixture)
           const resultStatus = getResultStatus(fixture, prediction, score)
-          const basePoints = score ? score.main + score.scoreline + score.penalty : null
+          const exactScorePoints = score?.scoreline === 3 ? 3 : 0
+          const goalDifferencePoints = score?.scoreline === 1 ? 1 : 0
+          const basePoints = score ? score.main + score.scoreline : null
           const jokerBonus = score && prediction.joker_used ? score.total - basePoints : null
 
           return (
@@ -114,9 +115,9 @@ function History({ data, session }) {
 
                 <div className="history-breakdown">
                   <p className="section-label">Points Breakdown</p>
-                  <BreakdownItem label="Result Prediction" value={score ? score.main : null} />
-                  <BreakdownItem label="Score Prediction" value={score ? score.scoreline : null} />
-                  {knockout && <BreakdownItem label="Penalty Prediction" value={score ? score.penalty : null} />}
+                  <BreakdownItem label="Winner Prediction" value={score ? score.main : null} />
+                  <BreakdownItem label="Scoreline Bonus" value={score ? exactScorePoints : null} />
+                  <BreakdownItem label="Goal Difference Bonus" value={score ? goalDifferencePoints : null} />
                   {prediction.joker_used && <BreakdownItem label="Joker Bonus" value={jokerBonus} joker />}
                   <div className="history-total">
                     <span>Total Points Earned</span>

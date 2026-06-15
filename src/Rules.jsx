@@ -5,31 +5,24 @@ export default function Rules() {
         <div>
           <p className="eyebrow">Game rules</p>
           <h2>Simple picks, sharp scoring.</h2>
-          <p>Optional bets can help, but blanks are safe. Jokers double the whole match score.</p>
+          <p>Pick the winner, chase exact scorelines, and use jokers to double your best calls.</p>
         </div>
       </div>
 
       <Rule title="Main Pick">
-        Favourite wins are worth 1 point. Underdogs pay 2, 3, or 5 points depending on the fixed
-        FIFA ranking gap. Knockouts use the team that advances.
+        Correct winner predictions are worth +3. Wrong winner predictions are 0. Knockouts use
+        the team that advances.
       </Rule>
       <Rule title="Scoreline">
-        Exact final score is +3. Correct goal difference is +1. Wrong goal difference is -2. Blank
-        scorelines are 0.
-      </Rule>
-      <Rule title="Penalties">
-        Knockouts only. A correct penalty call is +5. A wrong yes/no call is -3. Blank is safe.
-      </Rule>
-      <Rule title="Multipliers">
-        Main-pick points only: Group x1, R32 x1.5, R16 x2, QF x2.5, Semi x3, Final x4.
+        Exact final score is +3. Correct goal difference is +1. Anything else is 0. Blank
+        scorelines are also 0.
       </Rule>
       <Rule title="Jokers">
         Three per player for the tournament. One per match. They double the complete match score,
-        including negative scores.
+        so a perfect 6-point match becomes 12.
       </Rule>
       <Rule title="Tie-Breakers">
-        Total points, correct picks, head-to-head on differed picks, biggest upset, then knockout
-        points.
+        Total points, correct picks, then head-to-head on differed picks.
       </Rule>
     </section>
   )

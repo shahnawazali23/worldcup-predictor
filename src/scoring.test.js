@@ -27,14 +27,14 @@ const groupFixture = {
   is_finished: true,
 }
 
-assert.equal(scoreMatch(groupFixture, { picked_team_id: 'underdog' }, teamsById).total, 5)
+assert.equal(scoreMatch(groupFixture, { picked_team_id: 'underdog' }, teamsById).total, 3)
 assert.equal(
   scoreMatch(groupFixture, {
     picked_team_id: 'underdog',
     pred_goals_team1: 1,
     pred_goals_team2: 2,
   }, teamsById).total,
-  8,
+  6,
 )
 assert.equal(
   scoreMatch(groupFixture, {
@@ -42,7 +42,7 @@ assert.equal(
     pred_goals_team1: 0,
     pred_goals_team2: 1,
   }, teamsById).total,
-  6,
+  4,
 )
 assert.equal(
   scoreMatch(groupFixture, {
@@ -69,9 +69,25 @@ assert.equal(
   scoreMatch(canonicalIdentityFixture, { picked_team_id: 'usaLegacy' }, teamsById).correctPick,
   true,
 )
-assert.equal(scoreMatch(canonicalIdentityFixture, { picked_team_id: 'usaLegacy' }, teamsById).total, 1)
+assert.equal(scoreMatch(canonicalIdentityFixture, { picked_team_id: 'usaLegacy' }, teamsById).total, 3)
 assert.equal(scoreMatch(canonicalIdentityFixture, { pick_is_draw: true }, teamsById).correctPick, false)
 assert.equal(scoreMatch(canonicalIdentityFixture, { pick_is_draw: true }, teamsById).total, 0)
+assert.equal(
+  scoreMatch(canonicalIdentityFixture, {
+    picked_team_id: 'usaLegacy',
+    pred_goals_team1: 2,
+    pred_goals_team2: 0,
+  }, teamsById).total,
+  3,
+)
+assert.equal(
+  scoreMatch(canonicalIdentityFixture, {
+    picked_team_id: 'usaLegacy',
+    pred_goals_team1: 3,
+    pred_goals_team2: 0,
+  }, teamsById).total,
+  4,
+)
 
 const drawnFixture = {
   ...canonicalIdentityFixture,
@@ -83,7 +99,7 @@ const drawnFixture = {
 }
 
 assert.equal(scoreMatch(drawnFixture, { pick_is_draw: true }, teamsById).correctPick, true)
-assert.equal(scoreMatch(drawnFixture, { pick_is_draw: true }, teamsById).total, 1)
+assert.equal(scoreMatch(drawnFixture, { pick_is_draw: true }, teamsById).total, 3)
 
 const finalFixture = {
   id: 'f1',
@@ -107,7 +123,7 @@ assert.equal(
     pred_goals_team2: 1,
     penalty_call: 'yes',
   }, teamsById).total,
-  28,
+  6,
 )
 assert.equal(
   scoreMatch(finalFixture, {
@@ -115,7 +131,7 @@ assert.equal(
     penalty_call: 'no',
     joker_used: true,
   }, teamsById).total,
-  34,
+  6,
 )
 assert.equal(remainingJokers([{ user_id: 'u1', joker_used: true }], 'u1'), 2)
 

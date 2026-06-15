@@ -40,25 +40,14 @@ export function mainPickBasePoints(fixture, prediction, teamsById) {
   const pickedId = prediction.pick_is_draw ? 'draw' : prediction.picked_team_id
 
   if (!winnerId || !pickedId) return 0
-  if (pickedId === 'draw') return winnerId === 'draw' ? 1 : 0
+  if (pickedId === 'draw') return winnerId === 'draw' ? 3 : 0
   if (winnerId === 'draw') return 0
 
   const pickedTeam = teamsById[pickedId]
   const winnerTeam = teamsById[winnerId]
   if (!sameTeamIdentity(pickedTeam, winnerTeam)) return 0
 
-  const homeTeam = teamsById[fixture.team1_id]
-  const pickedIsHomeTeam = sameTeamIdentity(pickedTeam, homeTeam)
-  const opponentId = pickedIsHomeTeam ? fixture.team2_id : fixture.team1_id
-  const opponent = teamsById[opponentId]
-  if (!pickedTeam || !opponent) return 0
-
-  if (pickedTeam.fifa_rank < opponent.fifa_rank) return 1
-
-  const upsetGap = pickedTeam.fifa_rank - opponent.fifa_rank
-  if (upsetGap >= 40) return 5
-  if (upsetGap >= 15) return 3
-  return 2
+  return 3
 }
 
 function sameTeamIdentity(left, right) {
@@ -77,7 +66,7 @@ export function scorelineBonus(fixture, prediction) {
   if (actual1 == null || actual2 == null) return 0
   if (pred1 === actual1 && pred2 === actual2) return 3
   if (pred1 - pred2 === actual1 - actual2) return 1
-  return -2
+  return 0
 }
 
 export function penaltyBonus(fixture, prediction) {
@@ -91,11 +80,10 @@ export function scoreMatch(fixture, prediction, teamsById) {
   if (!fixture?.is_finished || !prediction) return emptyMatchScore()
 
   const baseMain = mainPickBasePoints(fixture, prediction, teamsById)
-  const multiplier = roundMultiplier(fixture)
-  const main = baseMain * multiplier
+  const main = baseMain
   const scoreline = scorelineBonus(fixture, prediction)
-  const penalty = penaltyBonus(fixture, prediction)
-  const beforeJoker = main + scoreline + penalty
+  const penalty = 0
+  const beforeJoker = main + scoreline
   const total = prediction.joker_used ? beforeJoker * 2 : beforeJoker
 
   return {
@@ -106,8 +94,6 @@ export function scoreMatch(fixture, prediction, teamsById) {
     penalty,
     jokerMultiplier: prediction.joker_used ? 2 : 1,
     correctPick: baseMain > 0,
-    biggestUpset: baseMain > 1 ? baseMain : 0,
-    knockoutPoints: isKnockoutFixture(fixture) ? total : 0,
   }
 }
 
@@ -120,8 +106,6 @@ export function emptyMatchScore() {
     penalty: 0,
     jokerMultiplier: 1,
     correctPick: false,
-    biggestUpset: 0,
-    knockoutPoints: 0,
   }
 }
 
@@ -145,8 +129,6 @@ export function buildLeaderboard({ fixtures, predictions, profiles, teamsById })
       finishedPicks: 0,
       predictionsMade: 0,
       jokersUsed: 0,
-      biggestUpset: 0,
-      knockoutPoints: 0,
       matchScores: {},
     }
 
@@ -159,8 +141,6 @@ export function buildLeaderboard({ fixtures, predictions, profiles, teamsById })
 
       const score = scoreMatch(fixture, prediction, teamsById)
       row.points += score.total
-      row.knockoutPoints += score.knockoutPoints
-      row.biggestUpset = Math.max(row.biggestUpset, score.biggestUpset)
       row.matchScores[fixture.id] = {
         points: score.total,
         picked: prediction.pick_is_draw ? 'draw' : prediction.picked_team_id,
@@ -181,8 +161,6 @@ export function compareLeaderboardRows(a, b) {
     b.points - a.points ||
     b.correctPicks - a.correctPicks ||
     headToHeadPoints(b, a) - headToHeadPoints(a, b) ||
-    b.biggestUpset - a.biggestUpset ||
-    b.knockoutPoints - a.knockoutPoints ||
     a.name.localeCompare(b.name)
   )
 }

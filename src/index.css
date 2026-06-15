@@ -1576,8 +1576,7 @@ select:disabled {
   background: #F2E5C7;
 }
 
-.rank-badge,
-.upset-badge {
+.rank-badge {
   padding: 4px 8px;
   border-radius: 999px;
   font-size: 0.68rem;
@@ -1594,11 +1593,6 @@ select:disabled {
 .team-pick.picked .rank-badge {
   color: #221804;
   background: #F1D99F;
-}
-
-.upset-badge {
-  color: #1f1600;
-  background: var(--gold);
 }
 
 .selected-badge {
@@ -2087,7 +2081,6 @@ select:disabled {
 
 .team-pick-points,
 .rank-badge,
-.upset-badge,
 .selected-badge {
   padding: 3px 7px;
   font-size: 0.62rem;

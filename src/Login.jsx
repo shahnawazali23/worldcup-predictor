@@ -15,7 +15,7 @@ export default function Login() {
       <section className="login-hero">
         <div className="login-copy">
           <p className="eyebrow">World Cup 2026</p>
-          <h1>Call the upsets. Beat your friends.</h1>
+          <h1>Call the matches. Beat your friends.</h1>
           <p>
             Predict every World Cup match, chase scoreline bonuses, and use your jokers wisely.
           </p>
@@ -30,7 +30,7 @@ export default function Login() {
             <li><span>1</span>Pick the match result</li>
             <li><span>2</span>Predict the exact scoreline</li>
             <li><span>3</span>Play 3 jokers wisely</li>
-            <li><span>4</span>Call upsets to climb the table</li>
+            <li><span>4</span>Climb the table with smart picks</li>
           </ol>
         </div>
       </section>

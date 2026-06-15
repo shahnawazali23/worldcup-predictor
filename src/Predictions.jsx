@@ -8,7 +8,7 @@ import {
   hasAssignedTeams,
 } from './fixtureDisplay'
 import { possibleMainPickPoints, predictionPotential } from './predictionPreview'
-import { buildLeaderboard, isKnockoutFixture, remainingJokers, roundMultiplier, scoreMatch } from './scoring'
+import { buildLeaderboard, isKnockoutFixture, remainingJokers, scoreMatch } from './scoring'
 import TeamFlag from './TeamFlag'
 import { fixtureKickoffDate, fixtureKickoffMs } from './time'
 
@@ -241,7 +241,6 @@ export default function Predictions({ active = true, data, onPredictionSaved, se
                   {isFeatured && <p className="live-label">Next match</p>}
                   <p className="fixture-stage">
                     {bracketLabel || fixture.stage}
-                    {roundMultiplier(fixture) > 1 && ` x${roundMultiplier(fixture)}`}
                   </p>
                   {bracketLabel && <p className="fixture-stage-detail">{fixture.stage}</p>}
                   <time>
@@ -275,7 +274,6 @@ export default function Predictions({ active = true, data, onPredictionSaved, se
                     })
                   }
                   points={team1Points}
-                  upset={team1Points > roundMultiplier(fixture)}
                   team={team1}
                 />
 
@@ -306,7 +304,6 @@ export default function Predictions({ active = true, data, onPredictionSaved, se
                     })
                   }
                   points={team2Points}
-                  upset={team2Points > roundMultiplier(fixture)}
                   team={team2}
                 />
                 </div>
@@ -372,22 +369,6 @@ export default function Predictions({ active = true, data, onPredictionSaved, se
                   </button>
                 )}
 
-                {knockout && (
-                  <select
-                    disabled={!teamsAssigned || locked || savingFixtureId === fixture.id}
-                    onChange={(event) =>
-                      updatePrediction(fixture, {
-                        penalty_call: event.target.value || null,
-                      })
-                    }
-                    value={prediction.penalty_call || ''}
-                  >
-                    <option value="">Pens: blank</option>
-                    <option value="yes">Pens: yes</option>
-                    <option value="no">Pens: no</option>
-                  </select>
-                )}
-
                 <button
                   aria-pressed={prediction.joker_used || false}
                   className={prediction.joker_used ? 'joker active' : 'joker'}
@@ -409,9 +390,9 @@ export default function Predictions({ active = true, data, onPredictionSaved, se
                     />
                   </span>
                   <span>
-                    <strong>{prediction.joker_used ? 'Joker armed' : 'Play Joker'}</strong>
+                    <strong>{prediction.joker_used ? '🔥 Joker Active (x2)' : 'Play Joker'}</strong>
                     <small>
-                      {prediction.joker_used ? 'Potential points x2' : `${jokersLeft} jokers left`}
+                      {prediction.joker_used ? 'Doubles fixture points' : `${jokersLeft} jokers left`}
                     </small>
                   </span>
                   {prediction.joker_used && (
@@ -480,23 +461,21 @@ function CountdownBadge({ isFinished, isLocked, ms, result }) {
   )
 }
 
-function PotentialPointsPanel({ fixture, potential, prediction }) {
-  const knockout = isKnockoutFixture(fixture)
-  const hasPenaltyCall = knockout && Boolean(prediction?.penalty_call)
-
+function PotentialPointsPanel({ potential, prediction }) {
   return (
     <details className="potential-panel">
       <summary>
         <span>Potential Points</span>
-        <strong>{formatPoints(potential.total)}</strong>
+        <strong>Maximum {formatPoints(potential.maximum)}</strong>
       </summary>
       <div className="potential-breakdown">
-        <BreakdownLine label="Result Prediction" value={`+${potential.main}`} active={potential.hasMainPick} />
-        <BreakdownLine label="Score Prediction" value={`+${potential.scoreline}`} active={potential.hasScoreline} />
-        {knockout && (
-          <BreakdownLine label="Penalty Prediction" value={hasPenaltyCall ? '+5' : '+0'} active={hasPenaltyCall} />
+        <BreakdownLine label="Winner Prediction" value={`+${potential.main}`} active={potential.hasMainPick} />
+        <BreakdownLine label="Scoreline Bonus" value={`+${potential.scoreline}`} active={potential.hasScoreline} />
+        <BreakdownLine label="Goal Difference Bonus" value={`+${potential.goalDifference}`} active={potential.hasScoreline} />
+        {prediction?.joker_used && (
+          <BreakdownLine label="🔥 Joker Active" value="x2" active joker />
         )}
-        <BreakdownLine label="Joker Multiplier" value={`x${potential.multiplier}`} active={potential.multiplier > 1} joker />
+        <BreakdownLine label="Maximum" value={`+${potential.maximum}`} active />
       </div>
     </details>
   )
@@ -511,7 +490,7 @@ function BreakdownLine({ active, joker = false, label, value }) {
   )
 }
 
-function TeamPick({ disabled, isPicked, onClick, points, team, upset }) {
+function TeamPick({ disabled, isPicked, onClick, points, team }) {
   return (
     <button
       className={isPicked ? 'team-pick picked' : 'team-pick'}
@@ -528,7 +507,6 @@ function TeamPick({ disabled, isPicked, onClick, points, team, upset }) {
       </span>
       <span className="rank-badge">{team.isPlaceholder ? 'Bracket' : `FIFA #${team.fifa_rank ?? '-'}`}</span>
       <span className="team-pick-points">{formatPoints(points)}</span>
-      {upset && <span className="upset-badge">Upset value</span>}
       {isPicked && <span className="selected-badge">Selected</span>}
     </button>
   )
