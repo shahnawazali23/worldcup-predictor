@@ -3,6 +3,7 @@ import { savePrediction } from './data'
 import {
   buildFixtureDisplayMeta,
   compareFixturesTournamentOrder,
+  formatGroupName,
   fixtureMatchLabel,
   fixtureParticipant,
   hasAssignedTeams,
@@ -33,6 +34,13 @@ function formatCountdown(ms) {
   const remainingSeconds = seconds % 60
   if (days > 0) return `${days}d ${hours}h ${minutes}m`
   return `${hours}h ${minutes}m ${remainingSeconds}s`
+}
+
+function formatFixtureContext(fixture, bracketLabel) {
+  return formatGroupName(fixture.group_name) ||
+    fixture.venue ||
+    bracketLabel ||
+    'Fixture'
 }
 
 function isPredictionComplete(prediction = {}) {
@@ -169,32 +177,22 @@ export default function Predictions({ active = true, data, onPredictionSaved, se
 
   return (
     <section className="screen-stack predictions-screen">
-      <div className="hero-band">
+      <div className="prediction-summary-strip stat-strip" aria-label="Prediction summary">
         <div>
-          <p className="eyebrow">Prediction League</p>
-          <h2>68 Matches. 3 Jokers. One Champion.</h2>
-          <p>
-            Winner picks, exact scores, insight bonuses and three dangerous jokers. Locks happen at
-            kickoff.
-          </p>
+          <span>{currentRank ? `#${currentRank}` : '-'}</span>
+          <small>Current rank</small>
         </div>
-        <div className="stat-strip">
-          <div>
-            <span>{currentRank ? `#${currentRank}` : '-'}</span>
-            <small>Current rank</small>
-          </div>
-          <div>
-            <span>{currentRow ? `${currentRow.accuracy.toFixed(0)}%` : '-'}</span>
-            <small>Accuracy</small>
-          </div>
-          <div>
-            <span>{currentStreak}</span>
-            <small>Current streak</small>
-          </div>
-          <div>
-            <span>{jokersLeft}</span>
-            <small>Jokers left</small>
-          </div>
+        <div>
+          <span>{currentRow ? `${currentRow.accuracy.toFixed(0)}%` : '-'}</span>
+          <small>Accuracy</small>
+        </div>
+        <div>
+          <span>{currentStreak}</span>
+          <small>Current streak</small>
+        </div>
+        <div>
+          <span>{jokersLeft}</span>
+          <small>Jokers left</small>
         </div>
       </div>
 
@@ -235,6 +233,8 @@ export default function Predictions({ active = true, data, onPredictionSaved, se
             !locked &&
             savingFixtureId !== fixture.id &&
             isPredictionComplete(prediction)
+          const justSaved = savedFixtureId === fixture.id
+          const fixtureContext = formatFixtureContext(fixture, bracketLabel)
 
           return (
             <article className={isFeatured ? 'fixture-card fixture-card-featured' : 'fixture-card'} key={fixture.id}>
@@ -405,20 +405,24 @@ export default function Predictions({ active = true, data, onPredictionSaved, se
                 </button>
 
                 <button
-                  className="save-prediction-button"
-                  disabled={!canSave}
+                  className={justSaved ? 'save-prediction-button saved' : 'save-prediction-button'}
+                  disabled={!canSave || justSaved}
                   onClick={() => saveDraftPrediction(fixture, prediction)}
                   type="button"
                 >
-                  {savingFixtureId === fixture.id ? 'Saving...' : 'Save Prediction'}
+                  {justSaved
+                    ? '✓ Prediction Saved'
+                    : savingFixtureId === fixture.id
+                      ? 'Saving...'
+                      : 'Save Prediction'}
                 </button>
               </div>
 
               <div className="fixture-foot">
                 <span>
                   {teamsAssigned
-                    ? `${fixture.venue || fixture.group_name || 'Fixture'} · locks 1 min before kickoff`
-                    : `${fixture.venue || fixture.group_name || bracketLabel || 'Bracket fixture'} · teams pending`}
+                    ? `${fixtureContext} • Locks 1 minute before kickoff`
+                    : `${fixtureContext} • Teams pending`}
                 </span>
                 <strong>
                   {pickedDraw
@@ -429,7 +433,7 @@ export default function Predictions({ active = true, data, onPredictionSaved, se
                         ? `Picked: ${team2.name}`
                         : 'No pick yet'}
                 </strong>
-                {savedFixtureId === fixture.id && <em className="saved-badge">Saved</em>}
+                {justSaved && <em className="saved-badge">✓ Prediction Saved</em>}
               </div>
             </article>
           )
@@ -477,16 +481,16 @@ function PotentialPointsPanel({ potential, prediction }) {
     <details className="potential-panel">
       <summary>
         <span>Potential Points</span>
-        <strong>Maximum {formatPoints(potential.maximum)}</strong>
+        <strong>Maximum Available {formatPoints(potential.maximum)}</strong>
       </summary>
       <div className="potential-breakdown">
         <BreakdownLine label="Winner Prediction" value={`+${potential.main}`} active={potential.hasMainPick} />
-        <BreakdownLine label="Exact Score Prediction" value={`+${potential.scoreline}`} active={potential.hasScoreline} />
+        <BreakdownLine label="Exact Score" value={`+${potential.scoreline}`} active={potential.hasScoreline} />
         <BreakdownLine label="Insight Bonus" value={`+${potential.insight}`} active={potential.hasScoreline} />
         {prediction?.joker_used && (
           <BreakdownLine label="🔥 Joker Active" value="x2" active joker />
         )}
-        <BreakdownLine label="Maximum" value={`+${potential.maximum}`} active />
+        <BreakdownLine label="Maximum Available" value={`+${potential.maximum}`} active />
       </div>
     </details>
   )

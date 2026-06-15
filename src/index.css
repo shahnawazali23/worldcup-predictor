@@ -2661,3 +2661,51 @@ select:disabled {
   padding: 0 6px;
   border-radius: 999px;
 }
+
+/* Prediction page cleanup */
+.prediction-summary-strip {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin: 0;
+}
+
+.prediction-summary-strip div {
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid rgba(16, 42, 67, 0.12);
+  border-radius: 8px;
+  background: #ffffff;
+  box-shadow: 0 8px 22px rgba(16, 42, 67, 0.06);
+}
+
+.prediction-summary-strip span {
+  color: var(--navy);
+  font-size: 1.35rem;
+}
+
+.prediction-summary-strip small {
+  color: #475569;
+  font-size: 0.72rem;
+  font-weight: 850;
+  text-transform: uppercase;
+}
+
+.save-prediction-button {
+  min-height: 44px;
+  padding: 0 18px;
+  box-shadow: 0 10px 24px rgba(16, 42, 67, 0.18);
+}
+
+.save-prediction-button.saved,
+.save-prediction-button.saved:disabled {
+  color: #063d2d;
+  background: #c8f5df;
+  box-shadow: none;
+}
+
+@media (max-width: 720px) {
+  .prediction-summary-strip {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}

@@ -74,13 +74,24 @@ export function hasAssignedTeams(fixture) {
   return Boolean(fixture.team1_id && fixture.team2_id)
 }
 
+export function formatGroupName(groupName = '') {
+  const value = String(groupName || '').trim()
+  if (!value) return ''
+
+  return value
+    .toLowerCase()
+    .replace(/^group[_\s-]*/, 'Group ')
+    .replace(/[_-]+/g, ' ')
+    .replace(/\b\w/g, (letter) => letter.toUpperCase())
+}
+
 function bracketParticipantLabel(fixture, side, sequenceByFixtureId) {
   const sideLabel = side === 'home' ? 'Home' : 'Away'
   const stage = stageLabel(fixture)
   const sequence = sequenceByFixtureId[fixture.id]
 
   if (fixture.group_name) {
-    return `${sideLabel} ${stage} participant (${fixture.group_name})`
+    return `${sideLabel} ${stage} participant (${formatGroupName(fixture.group_name)})`
   }
 
   if (sequence) {
