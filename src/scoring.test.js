@@ -68,7 +68,7 @@ assert.equal(
     pred_goals_team1: 5,
     pred_goals_team2: 1,
   }, teamsById).total,
-  8,
+  7,
 )
 assert.equal(
   calculateInsightBonus(insightFixture, {
@@ -83,14 +83,14 @@ assert.equal(
     pred_goals_team1: 4,
     pred_goals_team2: 1,
   }, teamsById).total,
-  4,
+  5,
 )
 assert.equal(
   calculateInsightBonus(insightFixture, {
     pred_goals_team1: 4,
     pred_goals_team2: 1,
   }, teamsById).bonus,
-  1,
+  2,
 )
 assert.equal(
   scoreMatch(insightFixture, {
@@ -122,7 +122,7 @@ assert.equal(
     pred_goals_team2: 1,
     joker_used: true,
   }, teamsById).total,
-  16,
+  14,
 )
 
 const canonicalIdentityFixture = {
@@ -194,7 +194,7 @@ assert.equal(
     pred_goals_team1: 1,
     pred_goals_team2: 1,
   }, teamsById).total,
-  7,
+  6,
 )
 assert.equal(
   scoreMatch(finalFixture, {

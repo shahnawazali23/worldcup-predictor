@@ -66,7 +66,7 @@ export function scorelineBonus(fixture, prediction) {
 
   if (pred1 == null || pred2 == null) return 0
   if (actual1 == null || actual2 == null) return 0
-  if (pred1 === actual1 && pred2 === actual2) return 3
+  if (pred1 === actual1 && pred2 === actual2) return 2
   return 0
 }
 
@@ -195,7 +195,7 @@ export function calculateInsightBonus(fixture, prediction, teamsById, fixtures =
   const insightScore = modelError - predictionError
 
   return {
-    bonus: insightScore >= 3 ? 2 : insightScore >= 1 ? 1 : insightScore === 0 ? 0 : -1,
+    bonus: insightScore >= 2 ? 2 : insightScore === 1 ? 1 : insightScore === 0 ? 0 : -1,
     expected,
     insightScore,
     modelError,

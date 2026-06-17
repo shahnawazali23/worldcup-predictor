@@ -216,7 +216,7 @@ function buildHistorySummary(rows) {
     currentStreak,
     rankTitle: rankTitleFor({
       accuracy,
-      exactScores: completedResultRows.filter((row) => row.score.scoreline === 3).length,
+      exactScores: completedResultRows.filter((row) => row.score.scoreline === 2).length,
       finishedPicks: completedResultRows.length,
     }),
     totalPoints,

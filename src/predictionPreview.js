@@ -7,7 +7,7 @@ export function predictionPotential({ fixture, prediction, teamsById }) {
   const pickedId = prediction?.pick_is_draw ? 'draw' : prediction?.picked_team_id
   const main = possibleMainPickPoints(fixture, pickedId || 'potential', teamsById)
   const hasScoreline = prediction?.pred_goals_team1 != null && prediction?.pred_goals_team2 != null
-  const scoreline = 3
+  const scoreline = 2
   const insight = 2
   const beforeJoker = main + scoreline + insight
   const multiplier = prediction?.joker_used ? 2 : 1

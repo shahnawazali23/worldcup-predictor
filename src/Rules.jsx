@@ -14,7 +14,7 @@ export default function Rules() {
         the team that advances.
       </Rule>
       <Rule title="Scoreline">
-        Exact final score is +3. Scoreline predictions are required before saving a pick.
+        Exact final score is +2. Scoreline predictions are required before saving a pick.
       </Rule>
       <Rule title="Insight Bonus">
         If your score prediction reads the match better than the internal expected score forecast,
@@ -23,7 +23,7 @@ export default function Rules() {
       </Rule>
       <Rule title="Jokers">
         Three per player for the tournament. One per match. They double the complete match score,
-        so an 8-point match becomes 16.
+        so a 7-point match becomes 14.
       </Rule>
       <Rule title="Tie-Breakers">
         Total points, correct picks, then head-to-head on differed picks.
