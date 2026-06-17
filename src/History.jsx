@@ -269,37 +269,143 @@ function insightExplanationFor({ fixture, prediction, score, team1, team2 }) {
   const predictedMargin = prediction.pred_goals_team1 - prediction.pred_goals_team2
   const actualWinner = actualMargin > 0 ? homeName : actualMargin < 0 ? awayName : 'the draw'
   const predictedWinner = predictedMargin > 0 ? homeName : predictedMargin < 0 ? awayName : 'the draw'
+  const winningSide = actualWinner === 'the draw' ? null : actualWinner
+  const actualLoser = actualMargin > 0 ? awayName : actualMargin < 0 ? homeName : null
+  const predictedWinnerCorrect = predictedWinner === actualWinner
+  const predictionError = score.insightDetails.predictionError
+  const templateSeed = `${fixture.id}-${prediction.user_id}-${predicted}-${actual}-${score.insightDetails.insightScore}`
 
-  if (score.insight > 0) {
-    if (actualMargin === 0 && predictedMargin === 0) {
-      return `You correctly saw ${homeName} and ${awayName} staying level, beating the ${expectedText} forecast with a ${predicted} call.`
+  if (score.insight >= 2) {
+    if (predictionError === 0) {
+      return pickInsightTemplate(templateSeed, [
+        `You called ${homeName} vs ${awayName} exactly as it unfolded, including the ${actual} scoreline.`,
+        `Your ${predicted} prediction nailed the final score and read the match better than the pre-match forecast.`,
+        `You saw the full ${actual} story before kickoff and collected the full Insight reward.`,
+      ])
     }
 
-    if (Math.abs(actualMargin) > Math.abs(expectedMargin) && predictedWinner === actualWinner) {
-      return `You anticipated a bigger ${actualWinner} performance than the ${expectedText} forecast, and your ${predicted} call moved closer to the ${actual} result.`
+    if (winningSide && predictedWinnerCorrect) {
+      return pickInsightTemplate(templateSeed, [
+        `You correctly predicted a much bigger ${winningSide} performance than expected and came close to the final result.`,
+        `You saw ${winningSide}'s dominant performance before kickoff, with your prediction landing closer to ${actual} than the forecast.`,
+        `You anticipated ${winningSide} taking control of the match more clearly than the pre-match forecast suggested.`,
+      ])
+    }
+
+    return pickInsightTemplate(templateSeed, [
+      `You read the final scoreline better than the pre-match forecast, coming close to the ${actual} result.`,
+      `Your score prediction captured how the match unfolded more sharply than the expected ${expectedText} outlook.`,
+      `You spotted a match pattern the forecast missed and moved close to the final ${actual} scoreline.`,
+    ])
+  }
+
+  if (score.insight === 1) {
+    if (actualMargin === 0 && predictedMargin === 0) {
+      return pickInsightTemplate(templateSeed, [
+        `You correctly saw ${homeName} and ${awayName} staying level and came close to the final ${actual} result.`,
+        `You read the draw well, with your prediction landing nearer to the final score than the pre-match forecast.`,
+        `You anticipated a tighter contest between ${homeName} and ${awayName} before kickoff.`,
+      ])
+    }
+
+    if (Math.abs(actualMargin) > Math.abs(expectedMargin) && predictedWinnerCorrect && winningSide) {
+      return pickInsightTemplate(templateSeed, [
+        `You anticipated a stronger ${winningSide} performance than expected and came close to the final result.`,
+        `You correctly backed ${winningSide} to pull away, even though the final score proved more emphatic.`,
+        `You saw ${winningSide} trending in the right direction before kickoff.`,
+      ])
     }
 
     if (fixture.goals_team1 > expected.home || fixture.goals_team2 > expected.away) {
       const teamName = fixture.goals_team1 > expected.home ? homeName : awayName
-      return `You correctly backed ${teamName} to find more attacking threat than the ${expectedText} forecast suggested.`
+      return pickInsightTemplate(templateSeed, [
+        `You correctly expected more attacking threat from ${teamName} and moved closer to the final ${actual} scoreline.`,
+        `${teamName}'s attack showed the edge your prediction was leaning toward before kickoff.`,
+        `You saw ${teamName} causing more problems than the forecast allowed for.`,
+      ])
     }
 
-    return `Your ${predicted} prediction read the ${homeName} vs ${awayName} match better than the ${expectedText} forecast.`
+    return pickInsightTemplate(templateSeed, [
+      `You were closer to the final ${actual} result than the pre-match forecast.`,
+      `Your scoreline read moved in the right direction as ${homeName} and ${awayName} played it out.`,
+      `You picked up on a match pattern that brought your prediction closer to the final result.`,
+    ])
+  }
+
+  if (score.insight === 0) {
+    if (predictionError <= 1) {
+      return pickInsightTemplate(templateSeed, [
+        `You were close to the final result, with only a small difference separating your prediction from the ${actual} outcome.`,
+        `Your prediction came within a single goal of the final ${actual} scoreline.`,
+        `You nearly matched the final score, even if one detail moved away from your prediction.`,
+      ])
+    }
+
+    if (predictedWinnerCorrect && winningSide) {
+      return pickInsightTemplate(templateSeed, [
+        `You correctly backed ${winningSide} to win, although the final margin finished differently from your prediction.`,
+        `You captured the overall direction of the match, with ${winningSide} getting the result you expected.`,
+        `You were right about ${winningSide} winning, even if the scoreline landed elsewhere.`,
+      ])
+    }
+
+    if (actualMargin === 0 && predictedMargin === 0) {
+      return pickInsightTemplate(templateSeed, [
+        `You correctly predicted the match would stay level, even though the final scoreline differed from your call.`,
+        `You saw ${homeName} and ${awayName} cancelling each other out before kickoff.`,
+        `You captured the draw, with the final score adding a little more movement than your prediction expected.`,
+      ])
+    }
+
+    return pickInsightTemplate(templateSeed, [
+      `Your prediction captured part of the match story, but the final ${actual} result moved in a different direction.`,
+      `${homeName} and ${awayName} played out differently from your call, leaving your Insight score level.`,
+      `Your read was not far enough from the outcome to lose Insight, but the final result still took a different shape.`,
+    ])
   }
 
   if (score.insight < 0) {
     if (predictedWinner !== actualWinner) {
-      return `${actualWinner === 'the draw' ? 'The match stayed level' : `${actualWinner} controlled the result`} far more than your ${predicted} prediction anticipated.`
+      return pickInsightTemplate(templateSeed, [
+        `${actualWinner === 'the draw' ? 'The match stayed level' : `${actualWinner} controlled the result`} far more than your ${predicted} prediction anticipated.`,
+        `${actualWinner === 'the draw' ? 'The draw became the story' : `${actualWinner} shaped the match`} while your prediction expected a different outcome.`,
+        `${homeName} vs ${awayName} moved away from your predicted winner as the final ${actual} result took hold.`,
+      ])
     }
 
-    if (Math.abs(actualMargin) > Math.abs(predictedMargin)) {
-      return `${actualWinner} delivered a stronger performance than your ${predicted} prediction suggested, with the match finishing ${actual}.`
+    if (Math.abs(actualMargin) > Math.abs(predictedMargin) && winningSide) {
+      return pickInsightTemplate(templateSeed, [
+        `${winningSide} delivered a stronger performance than your prediction suggested, with the match finishing ${actual}.`,
+        `${winningSide}'s attack proved more decisive than your prediction anticipated.`,
+        `The match became more one-sided than your prediction expected, with ${winningSide} pushing beyond your read.`,
+      ])
     }
 
-    return `${homeName} and ${awayName} played out differently from your ${predicted} read, with the ${actual} scoreline staying nearer to the ${expectedText} pre-match shape.`
+    if (actualLoser) {
+      return pickInsightTemplate(templateSeed, [
+        `${actualLoser} kept the match tighter than your prediction suggested.`,
+        `${homeName} and ${awayName} finished closer than your prediction expected.`,
+        `The final ${actual} result was tighter than your prediction allowed for.`,
+      ])
+    }
+
+    return pickInsightTemplate(templateSeed, [
+      `The match unfolded further from your scoreline than expected, ending ${actual}.`,
+      `${homeName} and ${awayName} produced a final result that moved away from your prediction.`,
+      `Your scoreline read missed how the match would settle, with the final result ending ${actual}.`,
+    ])
   }
+}
 
-  return `Your ${predicted} call landed on the same match shape as the ${expectedText} pre-match read for ${homeName} vs ${awayName}.`
+function pickInsightTemplate(seed, templates) {
+  const index = Math.abs(hashString(seed)) % templates.length
+  return templates[index]
+}
+
+function hashString(value) {
+  return Array.from(String(value)).reduce((hash, char) => {
+    return ((hash << 5) - hash + char.charCodeAt(0)) | 0
+  }, 0)
 }
 
 function rankTitleFor({ accuracy, exactScores, finishedPicks }) {
