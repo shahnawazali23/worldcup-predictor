@@ -72,7 +72,8 @@ export function scorelineBonus(fixture, prediction) {
   if (scorelineError === 1) return 2
   if (scorelineError === 2) return 1
   if (scorelineError === 3) return 0
-  return -1
+  if (scorelineError === 4) return -1
+  return -2
 }
 
 export function scorelineErrorFor(fixture, prediction) {

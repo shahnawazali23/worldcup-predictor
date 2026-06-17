@@ -70,63 +70,61 @@ function History({ data, session }) {
           const insightExplanation = score
             ? insightExplanationFor({ fixture, prediction, score, team1, team2 })
             : ''
+          const rating = score ? insightRatingFor(score.scoreline) : null
 
           return (
             <article className="history-row" key={fixture.id}>
-              <div className="history-match">
-                <span>{formatStageName(fixture.stage)}</span>
-                <div className="history-fixture-teams">
-                  <TeamNameWithFlag team={team1} />
-                  <b>vs</b>
-                  <TeamNameWithFlag team={team2} alignRight />
+              <div className="history-card-main">
+                <div className="history-card-meta">
+                  <span>{formatStageName(fixture.stage)}</span>
+                  <span className={`result-status result-status-${resultStatus.tone}`}>
+                    {resultStatus.label}
+                  </span>
+                  <time>
+                    {fixtureKickoffDate(fixture).toLocaleString(undefined, {
+                      day: 'numeric',
+                      month: 'short',
+                      hour: 'numeric',
+                      minute: '2-digit',
+                    })}
+                  </time>
                 </div>
-                <span className={`result-status result-status-${resultStatus.tone}`}>
-                  {resultStatus.label}
-                </span>
-                <time>
-                  {fixtureKickoffDate(fixture).toLocaleString(undefined, {
-                    day: 'numeric',
-                    month: 'short',
-                    hour: 'numeric',
-                    minute: '2-digit',
-                  })}
-                </time>
+
+                <ActualResult fixture={fixture} team1={team1} team2={team2} />
+
+                <div className="history-prediction-card">
+                  <span>Your Prediction</span>
+                  <strong>{formatPredictionLine({ fixture, prediction, pickedTeamRecord, team1, team2 })}</strong>
+                  <small>{predictedScore}</small>
+                </div>
               </div>
 
               <div className="history-detail">
-                <div className="history-summary-grid">
-                  <div>
-                    <small>Your Prediction</small>
-                    {prediction.pick_is_draw ? (
-                      <span className="history-team-name">
-                        <span className="draw-prediction-mark">DRAW</span>
-                        <strong>Draw</strong>
-                      </span>
-                    ) : pickedTeamRecord ? (
-                      <TeamNameWithFlag team={pickedTeamRecord} />
-                    ) : (
-                      <strong>No pick</strong>
-                    )}
-                    <span>{predictedScore}</span>
-                  </div>
-                  <div>
-                    <small>Actual Result</small>
-                    <ActualResult fixture={fixture} team1={team1} team2={team2} />
-                    <span>{fixture.is_finished ? 'Final' : 'Pending result'}</span>
-                  </div>
-                </div>
-
                 <div className="history-breakdown">
                   <p className="section-label">Points Breakdown</p>
                   <BreakdownItem label="Winner Prediction" value={score ? score.main : null} />
-                  <BreakdownItem label="Scoreline Insight" value={score ? scorelinePoints : null} />
+                  <BreakdownItem
+                    label="Insight Rating"
+                    meta={rating?.label}
+                    tone={rating?.tone}
+                    value={score ? scorelinePoints : null}
+                  />
                   {prediction.joker_used && <BreakdownItem label="Joker Bonus" value={jokerBonus} joker />}
-                  {insightExplanation && <p className="insight-explanation">{insightExplanation}</p>}
                   <div className="history-total">
                     <span>Total Points Earned</span>
-                    <strong>{score ? score.total : 'Pending'}</strong>
+                    <strong>{score ? formatPoints(score.total) : 'Pending'}</strong>
                   </div>
                 </div>
+
+                {insightExplanation && (
+                  <div className="match-analysis-card">
+                    <span>
+                      <Icon name="activity" size={16} />
+                      Match Analysis
+                    </span>
+                    <p>{insightExplanation}</p>
+                  </div>
+                )}
               </div>
             </article>
           )
@@ -226,10 +224,17 @@ function getResultStatus(fixture, prediction, score) {
     : { label: 'Wrong Result', tone: 'danger' }
 }
 
-function BreakdownItem({ joker = false, label, value }) {
+function BreakdownItem({ joker = false, label, meta, tone, value }) {
   return (
-    <div className={joker ? 'history-breakdown-line history-breakdown-joker' : 'history-breakdown-line'}>
-      <span>{label}</span>
+    <div className={[
+      'history-breakdown-line',
+      joker ? 'history-breakdown-joker' : '',
+      tone ? `history-breakdown-${tone}` : '',
+    ].filter(Boolean).join(' ')}>
+      <span>
+        {label}
+        {meta && <small>{meta}</small>}
+      </span>
       <strong>
         {value == null
           ? 'Pending'
@@ -241,7 +246,31 @@ function BreakdownItem({ joker = false, label, value }) {
 
 function formatPredictedScore(prediction) {
   if (prediction.pred_goals_team1 == null || prediction.pred_goals_team2 == null) return 'No score prediction'
-  return `Score ${prediction.pred_goals_team1}-${prediction.pred_goals_team2}`
+  return `${prediction.pred_goals_team1}-${prediction.pred_goals_team2}`
+}
+
+function formatPredictionLine({ fixture, prediction, pickedTeamRecord, team1, team2 }) {
+  const scoreText = formatPredictedScore(prediction)
+  const homeName = team1?.name || fixture.home_team || 'Home'
+  const awayName = team2?.name || fixture.away_team || 'Away'
+
+  if (prediction.pick_is_draw) return `${homeName} ${scoreText} ${awayName}`
+  if (pickedTeamRecord?.name) return `${pickedTeamRecord.name} ${scoreText}`
+  return `No pick ${scoreText}`
+}
+
+function formatPoints(points) {
+  if (typeof points !== 'number') return points
+  return `${points >= 0 ? '+' : ''}${points} pts`
+}
+
+function insightRatingFor(points) {
+  if (points >= 3) return { icon: 'target', label: 'Excellent Read', tone: 'excellent' }
+  if (points === 2) return { icon: 'trendingUp', label: 'Strong Read', tone: 'strong' }
+  if (points === 1) return { icon: 'checkCircle', label: 'Solid Read', tone: 'solid' }
+  if (points === 0) return { icon: 'activity', label: 'Neutral Read', tone: 'neutral' }
+  if (points === -1) return { icon: 'clock', label: 'Missed Read', tone: 'missed' }
+  return { icon: 'lock', label: 'Poor Read', tone: 'poor' }
 }
 
 function insightExplanationFor({ fixture, prediction, score, team1, team2 }) {

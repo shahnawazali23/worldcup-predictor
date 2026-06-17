@@ -43,7 +43,7 @@ function Leaderboard({ data, session }) {
               <th>Rank</th>
               <th>Player</th>
               <th>Points</th>
-              <th>Predictions</th>
+              <th>Form</th>
               <th>Correct</th>
               <th>Wrong</th>
               <th>Accuracy</th>
@@ -85,10 +85,20 @@ function Leaderboard({ data, session }) {
                   <strong>{row.points}</strong>
                   <span>pts</span>
                 </td>
-                <td data-label="Predictions">{row.predictionsMade}</td>
+                <td data-label="Form">
+                  <div className="form-strip" aria-label={`Last five completed scores for ${row.name}`}>
+                    {row.form.length > 0
+                      ? row.form.map((points, formIndex) => (
+                        <span className={formTone(points)} key={`${row.id}-form-${formIndex}`}>
+                          {points > 0 ? `+${points}` : points}
+                        </span>
+                      ))
+                      : <small>-</small>}
+                  </div>
+                </td>
                 <td data-label="Correct">{row.correctPicks}</td>
                 <td data-label="Wrong">{row.wrongPicks}</td>
-                <td data-label="Accuracy">{row.accuracy.toFixed(0)}%</td>
+                <td className="table-accuracy" data-label="Accuracy">{row.accuracy.toFixed(0)}%</td>
                 <td data-label="Exact Scores">{row.exactScores}</td>
               </tr>
             ))}
@@ -122,6 +132,7 @@ function buildLeaderboardView(data, currentUserId) {
         correctPicks: 0,
         exactScores: 0,
         finishedPicks: 0,
+        form: [],
         predictionsMade: 0,
         wrongPicks: 0,
       },
@@ -140,6 +151,10 @@ function buildLeaderboardView(data, currentUserId) {
 
     const score = scoreMatch(fixture, prediction, data.teamsById, data.fixtures)
     analytics.finishedPicks += 1
+    analytics.form.push({
+      kickoff: fixtureKickoffMs(fixture),
+      points: score.total,
+    })
     if (score.correctPick) analytics.correctPicks += 1
     if (!score.correctPick) analytics.wrongPicks += 1
     if (score.scorelineError === 0) analytics.exactScores += 1
@@ -153,6 +168,11 @@ function buildLeaderboardView(data, currentUserId) {
       accuracy: analytics.finishedPicks
         ? (analytics.correctPicks / analytics.finishedPicks) * 100
         : 0,
+      form: analytics.form
+        .sort((a, b) => b.kickoff - a.kickoff)
+        .slice(0, 5)
+        .reverse()
+        .map((item) => item.points),
       rankTitle: rankTitleFor({
         accuracy: analytics.finishedPicks
           ? (analytics.correctPicks / analytics.finishedPicks) * 100
@@ -167,6 +187,13 @@ function buildLeaderboardView(data, currentUserId) {
     rows,
     summaryCards: buildSummaryCards(rows),
   }
+}
+
+function formTone(points) {
+  if (points >= 5) return 'form-win'
+  if (points > 0) return 'form-positive'
+  if (points === 0) return 'form-neutral'
+  return 'form-negative'
 }
 
 function logFinishedPredictionDebug(data, fixturesById) {

@@ -88,10 +88,18 @@ assert.equal(
 assert.equal(
   scoreMatch(insightFixture, {
     picked_team_id: 'underdog',
-    pred_goals_team1: 0,
+    pred_goals_team1: 1,
     pred_goals_team2: 1,
   }, teamsById).total,
   -1,
+)
+assert.equal(
+  scoreMatch(insightFixture, {
+    picked_team_id: 'underdog',
+    pred_goals_team1: 0,
+    pred_goals_team2: 1,
+  }, teamsById).total,
+  -2,
 )
 assert.equal(
   scoreMatch(insightFixture, {
