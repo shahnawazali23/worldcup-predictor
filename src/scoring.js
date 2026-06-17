@@ -66,8 +66,25 @@ export function scorelineBonus(fixture, prediction) {
 
   if (pred1 == null || pred2 == null) return 0
   if (actual1 == null || actual2 == null) return 0
-  if (pred1 === actual1 && pred2 === actual2) return 2
-  return 0
+
+  const scorelineError = Math.abs(pred1 - actual1) + Math.abs(pred2 - actual2)
+  if (scorelineError === 0) return 3
+  if (scorelineError === 1) return 2
+  if (scorelineError === 2) return 1
+  if (scorelineError === 3) return 0
+  return -1
+}
+
+export function scorelineErrorFor(fixture, prediction) {
+  const pred1 = prediction.pred_goals_team1
+  const pred2 = prediction.pred_goals_team2
+  const actual1 = fixture.goals_team1
+  const actual2 = fixture.goals_team2
+
+  if (pred1 == null || pred2 == null) return null
+  if (actual1 == null || actual2 == null) return null
+
+  return Math.abs(pred1 - actual1) + Math.abs(pred2 - actual2)
 }
 
 export function expectedScoreForFixture(fixture, teamsById, fixtures = []) {
@@ -213,16 +230,14 @@ function emptyInsight() {
   }
 }
 
-export function scoreMatch(fixture, prediction, teamsById, fixtures = []) {
+export function scoreMatch(fixture, prediction, teamsById) {
   if (!fixture?.is_finished || !prediction) return emptyMatchScore()
 
   const baseMain = mainPickBasePoints(fixture, prediction, teamsById)
   const main = baseMain
   const scoreline = scorelineBonus(fixture, prediction)
-  const insight = INSIGHT_BONUS_ENABLED
-    ? calculateInsightBonus(fixture, prediction, teamsById, fixtures)
-    : emptyInsight()
-  const beforeJoker = main + scoreline + insight.bonus
+  const scorelineError = scorelineErrorFor(fixture, prediction)
+  const beforeJoker = main + scoreline
   const total = prediction.joker_used ? beforeJoker * 2 : beforeJoker
 
   return {
@@ -230,9 +245,13 @@ export function scoreMatch(fixture, prediction, teamsById, fixtures = []) {
     main,
     baseMain,
     exactScore: scoreline,
-    insight: insight.bonus,
-    insightDetails: insight,
+    insight: scoreline,
+    insightDetails: {
+      ...emptyInsight(),
+      scorelineError,
+    },
     scoreline,
+    scorelineError,
     jokerMultiplier: prediction.joker_used ? 2 : 1,
     correctPick: baseMain > 0,
   }
@@ -245,8 +264,12 @@ export function emptyMatchScore() {
     baseMain: 0,
     exactScore: 0,
     insight: 0,
-    insightDetails: emptyInsight(),
+    insightDetails: {
+      ...emptyInsight(),
+      scorelineError: null,
+    },
     scoreline: 0,
+    scorelineError: null,
     jokerMultiplier: 1,
     correctPick: false,
   }

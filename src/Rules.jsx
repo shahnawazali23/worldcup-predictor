@@ -5,7 +5,7 @@ export default function Rules() {
         <div>
           <p className="eyebrow">Game rules</p>
           <h2>Simple picks, sharp scoring.</h2>
-          <p>Pick the winner, predict the scoreline, beat the forecast, and use jokers wisely.</p>
+          <p>Pick the winner, predict the scoreline, and use jokers wisely.</p>
         </div>
       </div>
 
@@ -13,17 +13,13 @@ export default function Rules() {
         Correct winner predictions are worth +3. Wrong winner predictions are 0. Knockouts use
         the team that advances.
       </Rule>
-      <Rule title="Scoreline">
-        Exact final score is +2. Scoreline predictions are required before saving a pick.
-      </Rule>
-      <Rule title="Insight Bonus">
-        If your score prediction reads the match better than the internal expected score forecast,
-        you can earn +1 or +2. If it reads the match worse, the insight score is -1.
-        Expected scores are hidden until the match is complete.
+      <Rule title="Scoreline Insight">
+        Exact final score is +3. One goal away is +2, two goals away is +1, three goals away is 0,
+        and four or more goals away is -1. Scoreline predictions are required before saving a pick.
       </Rule>
       <Rule title="Jokers">
         Three per player for the tournament. One per match. They double the complete match score,
-        so a 7-point match becomes 14.
+        so a 6-point match becomes 12.
       </Rule>
       <Rule title="Tie-Breakers">
         Total points, correct picks, then head-to-head on differed picks.
