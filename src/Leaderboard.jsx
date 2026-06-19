@@ -15,6 +15,11 @@ function Leaderboard({ data, session }) {
         <div>
           <h2>Leaderboard</h2>
           <p>Compare points, accuracy and exact scores.</p>
+          {summaryCards.mostInsightful && (
+            <small className="leaderboard-title-help">
+              Most Insightful Player: {summaryCards.mostInsightful.name} · {formatSignedNumber(summaryCards.mostInsightful.totalInsightPoints)} scoreline pts
+            </small>
+          )}
           <small
             className="leaderboard-title-help"
             title="Rank titles unlock from completed result predictions, accuracy, and exact scores."
@@ -24,9 +29,9 @@ function Leaderboard({ data, session }) {
         </div>
       </div>
 
-      {summaryCards.length > 0 && (
+      {summaryCards.cards.length > 0 && (
         <div className="competition-summary">
-          {summaryCards.map((card) => (
+          {summaryCards.cards.map((card) => (
             <div className="competition-summary-card" key={card.label}>
               <span>{card.label}</span>
               <strong>{card.name}</strong>
@@ -43,11 +48,12 @@ function Leaderboard({ data, session }) {
               <th>Rank</th>
               <th>Player</th>
               <th>Points</th>
-              <th>Form</th>
-              <th>Correct</th>
-              <th>Wrong</th>
+              <th>Gap</th>
+              <th>Predictions</th>
+              <th>Record</th>
               <th>Accuracy</th>
-              <th>Exact Scores</th>
+              <th>Streak</th>
+              <th>Form</th>
             </tr>
           </thead>
           <tbody>
@@ -78,6 +84,9 @@ function Leaderboard({ data, session }) {
                         <Icon name={row.rankTitle.icon} size={14} />
                         {row.rankTitle.label}
                       </span>
+                      {row.primaryBadge && (
+                        <span className="player-achievement-badge">{row.primaryBadge}</span>
+                      )}
                     </div>
                   </div>
                 </td>
@@ -85,21 +94,45 @@ function Leaderboard({ data, session }) {
                   <strong>{row.points}</strong>
                   <span>pts</span>
                 </td>
+                <td data-label="Gap">
+                  <span className={row.gapToLeader === 0 ? 'leader-gap leader-gap-top' : 'leader-gap'}>
+                    {row.gapToLeader === 0 ? 'Leader' : `${row.gapToLeader} pts behind`}
+                  </span>
+                </td>
+                <td data-label="Predictions">
+                  <div className="table-stat">
+                    <strong>{row.predictionsMade}</strong>
+                    <span>Predictions</span>
+                  </div>
+                </td>
+                <td data-label="Record">
+                  <div className="table-stat">
+                    <strong>{row.correctPicks}-{row.wrongPicks}</strong>
+                    <span>{row.exactScores} exact</span>
+                  </div>
+                </td>
+                <td className="table-accuracy" data-label="Accuracy">{row.accuracy.toFixed(0)}%</td>
+                <td data-label="Streak">
+                  <span className={row.currentStreak > 0 ? 'streak-pill streak-pill-active' : 'streak-pill'}>
+                    {formatStreak(row.currentStreak)}
+                  </span>
+                </td>
                 <td data-label="Form">
                   <div className="form-strip" aria-label={`Last five completed scores for ${row.name}`}>
                     {row.form.length > 0
                       ? row.form.map((points, formIndex) => (
-                        <span className={formTone(points)} key={`${row.id}-form-${formIndex}`}>
-                          {points > 0 ? `+${points}` : points}
+                        <span
+                          aria-label={`${points > 0 ? '+' : ''}${points} pts`}
+                          className={formTone(points)}
+                          key={`${row.id}-form-${formIndex}`}
+                          title={`${points > 0 ? '+' : ''}${points} pts`}
+                        >
+                          <span className="sr-only">{points > 0 ? `+${points}` : points}</span>
                         </span>
                       ))
                       : <small>-</small>}
                   </div>
                 </td>
-                <td data-label="Correct">{row.correctPicks}</td>
-                <td data-label="Wrong">{row.wrongPicks}</td>
-                <td className="table-accuracy" data-label="Accuracy">{row.accuracy.toFixed(0)}%</td>
-                <td data-label="Exact Scores">{row.exactScores}</td>
               </tr>
             ))}
           </tbody>
@@ -134,6 +167,7 @@ function buildLeaderboardView(data, currentUserId) {
         finishedPicks: 0,
         form: [],
         predictionsMade: 0,
+        totalInsightPoints: 0,
         wrongPicks: 0,
       },
     ]),
@@ -152,24 +186,33 @@ function buildLeaderboardView(data, currentUserId) {
     const score = scoreMatch(fixture, prediction, data.teamsById, data.fixtures)
     analytics.finishedPicks += 1
     analytics.form.push({
+      correctPick: score.correctPick,
       kickoff: fixtureKickoffMs(fixture),
       points: score.total,
     })
     if (score.correctPick) analytics.correctPicks += 1
     if (!score.correctPick) analytics.wrongPicks += 1
     if (score.scorelineComponents.exact > 0) analytics.exactScores += 1
+    analytics.totalInsightPoints += score.scoreline || 0
   })
 
-  const rows = baseRows.map((row) => {
+  const rowsWithoutPresentation = baseRows.map((row) => {
     const analytics = analyticsByUser[row.id]
+    const sortedForm = analytics.form.sort((a, b) => b.kickoff - a.kickoff)
+    const currentStreak = sortedForm.reduce((streak, item) => {
+      if (streak.done) return streak
+      if (item.correctPick) return { count: streak.count + 1, done: false }
+      return { count: streak.count, done: true }
+    }, { count: 0, done: false }).count
+
     return {
       ...row,
       ...analytics,
       accuracy: analytics.finishedPicks
         ? (analytics.correctPicks / analytics.finishedPicks) * 100
         : 0,
-      form: analytics.form
-        .sort((a, b) => b.kickoff - a.kickoff)
+      currentStreak,
+      form: sortedForm
         .slice(0, 5)
         .reverse()
         .map((item) => item.points),
@@ -182,6 +225,7 @@ function buildLeaderboardView(data, currentUserId) {
       }),
     }
   })
+  const rows = applyLeaderboardPresentation(rowsWithoutPresentation)
 
   return {
     rows,
@@ -239,7 +283,7 @@ function isPredictionVisibleForMetrics(prediction, fixture, currentUserId, now) 
 }
 
 function buildSummaryCards(rows) {
-  if (rows.length === 0) return []
+  if (rows.length === 0) return { cards: [], mostInsightful: null }
 
   const cards = []
   const leader = rows[0]
@@ -257,14 +301,53 @@ function buildSummaryCards(rows) {
     value: mostAccurate ? `${mostAccurate.accuracy.toFixed(0)}%` : '-',
   })
 
-  const mostExact = maxBy(rows, (row) => row.exactScores)
+  const streakLeader = maxBy(completedRows, (row) => row.currentStreak)
   cards.push({
-    label: 'Most Exact Scores',
-    name: mostExact?.name || 'No players yet',
-    value: `${mostExact?.exactScores || 0}`,
+    label: 'Current Streak Leader',
+    name: streakLeader?.currentStreak > 0 ? streakLeader.name : 'No active streak',
+    value: streakLeader?.currentStreak > 0 ? formatStreak(streakLeader.currentStreak) : '-',
   })
 
-  return cards
+  return {
+    cards,
+    mostInsightful: maxBy(rows, (row) => row.totalInsightPoints),
+  }
+}
+
+function applyLeaderboardPresentation(rows) {
+  const leaderPoints = rows[0]?.points || 0
+  const mostInsightful = maxBy(rows, (row) => row.totalInsightPoints)
+  const bestAccuracy = maxBy(rows.filter((row) => row.finishedPicks > 0), (row) => row.accuracy)
+  const streakLeader = maxBy(rows.filter((row) => row.currentStreak > 0), (row) => row.currentStreak)
+
+  return rows.map((row, index) => ({
+    ...row,
+    gapToLeader: Math.max(leaderPoints - row.points, 0),
+    primaryBadge: primaryBadgeFor({
+      bestAccuracy,
+      index,
+      mostInsightful,
+      row,
+      streakLeader,
+    }),
+  }))
+}
+
+function primaryBadgeFor({ bestAccuracy, index, mostInsightful, row, streakLeader }) {
+  if (index === 0) return 'Tournament Leader'
+  if (mostInsightful?.id === row.id && row.totalInsightPoints > 0) return 'Most Insightful Player'
+  if (bestAccuracy?.id === row.id && row.accuracy > 0) return 'Best Accuracy'
+  if (streakLeader?.id === row.id && row.currentStreak > 0) return 'Current Streak Leader'
+  return ''
+}
+
+function formatSignedNumber(value) {
+  return `${value > 0 ? '+' : ''}${value || 0}`
+}
+
+function formatStreak(streak) {
+  if (!streak) return 'No Active Streak'
+  return `${streak} Correct ${streak === 1 ? 'Pick' : 'Picks'}`
 }
 
 function maxBy(rows, getValue) {
