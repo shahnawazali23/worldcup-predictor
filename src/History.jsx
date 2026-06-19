@@ -268,16 +268,16 @@ function predictionSummaryFor({ fixture, prediction, score, team1, team2 }) {
 
   const homeName = team1?.name || fixture.home_team || 'Home team'
   const awayName = team2?.name || fixture.away_team || 'Away team'
-  const actual = `${fixture.goals_team1}-${fixture.goals_team2}`
   const actualMargin = fixture.goals_team1 - fixture.goals_team2
   const predictedMargin = prediction.pred_goals_team1 - prediction.pred_goals_team2
   const actualWinner = actualMargin > 0 ? homeName : actualMargin < 0 ? awayName : null
   const predictedWinner = predictedMargin > 0 ? homeName : predictedMargin < 0 ? awayName : null
+  const actualLoser = actualWinner === homeName ? awayName : actualWinner === awayName ? homeName : null
 
   if (score.scorelineComponents?.exact > 0) {
     return {
       status: 'Perfect Call',
-      text: `Perfect call. You predicted ${homeName} ${actual} ${awayName} exactly.`,
+      text: 'You predicted the exact score.',
     }
   }
 
@@ -285,34 +285,52 @@ function predictionSummaryFor({ fixture, prediction, score, team1, team2 }) {
     if (prediction.pick_is_draw && actualWinner) {
       return {
         status: 'Missed Call',
-        text: `Missed call. ${actualWinner} beat ${actualWinner === homeName ? awayName : homeName} after a match you called as a draw.`,
+        text: 'A winner emerged when you predicted a draw.',
       }
     }
 
     if (!actualWinner) {
       return {
         status: 'Missed Call',
-        text: `Missed call. ${homeName} could not break down ${awayName} and the match ended ${actual}.`,
+        text: 'The teams shared the points instead.',
       }
     }
 
     return {
       status: 'Missed Call',
-      text: `Missed call. The match went the other way, with ${actualWinner} winning ${actual}.`,
+      text: 'The match went the other way.',
     }
   }
 
   if (!score.scorelineComponents?.aligned) {
     return {
       status: 'Good Prediction',
-      text: 'Good prediction. You got the result right, but the scoreline did not match that pick.',
+      text: 'You correctly picked the winner.',
     }
   }
 
   if (score.scorelineError != null && score.scorelineError <= 1) {
+    const missedLoserGoal = actualWinner &&
+      predictedWinner === actualWinner &&
+      (
+        (actualLoser === homeName &&
+          prediction.pred_goals_team1 === fixture.goals_team1 - 1 &&
+          prediction.pred_goals_team2 === fixture.goals_team2) ||
+        (actualLoser === awayName &&
+          prediction.pred_goals_team1 === fixture.goals_team1 &&
+          prediction.pred_goals_team2 === fixture.goals_team2 - 1)
+      )
+
+    if (missedLoserGoal) {
+      return {
+        status: 'Very Close',
+        text: `You correctly backed ${actualWinner} to win. ${actualLoser}'s goal was the only thing you missed.`,
+      }
+    }
+
     return {
       status: 'Very Close',
-      text: `Very close. ${predictedWinner || 'The draw'} landed as predicted and you missed the exact score by just one goal.`,
+      text: 'You got the winner right and missed the exact score by one goal.',
     }
   }
 
@@ -322,20 +340,20 @@ function predictionSummaryFor({ fixture, prediction, score, team1, team2 }) {
   if (actualAbsMargin > predictedAbsMargin && actualWinner) {
     return {
       status: 'Good Prediction',
-      text: `You got the winner right, but ${actualWinner} won by a much bigger margin.`,
+      text: 'You got the winner right, but the winning margin was larger than expected.',
     }
   }
 
   if (actualAbsMargin < predictedAbsMargin) {
     return {
       status: 'Good Prediction',
-      text: 'You got the winner right, but the match was closer than your scoreline suggested.',
+      text: 'You got the winner right, but the match was closer than expected.',
     }
   }
 
   return {
     status: 'Good Prediction',
-    text: `Good prediction. You correctly picked ${predictedWinner || 'the draw'}.`,
+    text: 'You correctly picked the winner.',
   }
 }
 
