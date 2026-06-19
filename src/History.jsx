@@ -67,9 +67,9 @@ function History({ data, session }) {
           const scorelinePoints = score?.scoreline || 0
           const basePoints = score ? score.main + scorelinePoints : null
           const jokerBonus = score && prediction.joker_used ? score.total - basePoints : null
-          const insightExplanation = score
-            ? insightExplanationFor({ fixture, prediction, score, team1, team2 })
-            : ''
+          const predictionSummary = score
+            ? predictionSummaryFor({ fixture, prediction, score, team1, team2 })
+            : null
 
           return (
             <article className="history-row" key={fixture.id}>
@@ -110,13 +110,14 @@ function History({ data, session }) {
                   </div>
                 </div>
 
-                {insightExplanation && (
+                {predictionSummary && (
                   <div className="match-analysis-card">
                     <span>
                       <Icon name="activity" size={16} />
-                      Match Analysis
+                      Prediction Summary
                     </span>
-                    <p>{insightExplanation}</p>
+                    <strong>{predictionSummary.status}</strong>
+                    <p>{predictionSummary.text}</p>
                   </div>
                 )}
               </div>
@@ -262,94 +263,80 @@ function formatPoints(points) {
   return `${points >= 0 ? '+' : ''}${points} pts`
 }
 
-function insightExplanationFor({ fixture, prediction, score, team1, team2 }) {
-  if (prediction.pred_goals_team1 == null || prediction.pred_goals_team2 == null) return ''
+function predictionSummaryFor({ fixture, prediction, score, team1, team2 }) {
+  if (prediction.pred_goals_team1 == null || prediction.pred_goals_team2 == null) return null
 
   const homeName = team1?.name || fixture.home_team || 'Home team'
   const awayName = team2?.name || fixture.away_team || 'Away team'
-  const predicted = `${prediction.pred_goals_team1}-${prediction.pred_goals_team2}`
   const actual = `${fixture.goals_team1}-${fixture.goals_team2}`
   const actualMargin = fixture.goals_team1 - fixture.goals_team2
-  const actualWinner = actualMargin > 0 ? homeName : actualMargin < 0 ? awayName : 'the draw'
-  const winningSide = actualWinner === 'the draw' ? null : actualWinner
-  const losingSide = actualMargin > 0 ? awayName : actualMargin < 0 ? homeName : null
-  const predictedCleanSheet = prediction.pred_goals_team1 === 0 || prediction.pred_goals_team2 === 0
-  const actualCleanSheet = fixture.goals_team1 === 0 || fixture.goals_team2 === 0
-  const scorelineError = score.scorelineError
-  const templateSeed = `${fixture.id}-${prediction.user_id}-${predicted}-${actual}-${score.total}`
+  const predictedMargin = prediction.pred_goals_team1 - prediction.pred_goals_team2
+  const actualWinner = actualMargin > 0 ? homeName : actualMargin < 0 ? awayName : null
+  const predictedWinner = predictedMargin > 0 ? homeName : predictedMargin < 0 ? awayName : null
 
   if (score.scorelineComponents?.exact > 0) {
-    return pickInsightTemplate(templateSeed, [
-      `Perfect call. You predicted ${homeName} ${actual} ${awayName} exactly.`,
-      `You read this one perfectly, calling the ${actual} scoreline before kickoff.`,
-      `Spot on. Your prediction matched the final result exactly.`,
-    ])
+    return {
+      status: 'Perfect Call',
+      text: `Perfect call. You predicted ${homeName} ${actual} ${awayName} exactly.`,
+    }
   }
 
   if (!score.correctPick) {
-    if (actualWinner === 'the draw') {
-      return pickInsightTemplate(templateSeed, [
-        `The match never developed as expected. ${homeName} and ${awayName} cancelled each other out in a ${actual} draw.`,
-        `Neither side found enough separation, turning your ${predicted} call into a ${actual} draw.`,
-        `This finished level, not the result your ${predicted} prediction anticipated.`,
-      ])
+    if (prediction.pick_is_draw && actualWinner) {
+      return {
+        status: 'Missed Call',
+        text: `Missed call. ${actualWinner} beat ${actualWinner === homeName ? awayName : homeName} after a match you called as a draw.`,
+      }
     }
 
-    return pickInsightTemplate(templateSeed, [
-      `${winningSide} took control of the match far more decisively than your ${predicted} prediction anticipated.`,
-      `${winningSide} found the result your prediction did not see, finishing ${actual} against ${losingSide}.`,
-      `The match moved away from your ${predicted} call, with ${winningSide} coming out on top ${actual}.`,
-    ])
+    if (!actualWinner) {
+      return {
+        status: 'Missed Call',
+        text: `Missed call. ${homeName} could not break down ${awayName} and the match ended ${actual}.`,
+      }
+    }
+
+    return {
+      status: 'Missed Call',
+      text: `Missed call. The match went the other way, with ${actualWinner} winning ${actual}.`,
+    }
   }
 
   if (!score.scorelineComponents?.aligned) {
-    return pickInsightTemplate(templateSeed, [
-      `You picked the right result, but your ${predicted} scoreline told a different story.`,
-      `The result pick was right, although the scoreline did not match the outcome you selected.`,
-      `You got the winner, but the score prediction pulled away from that call.`,
-    ])
+    return {
+      status: 'Good Prediction',
+      text: 'Good prediction. You got the result right, but the scoreline did not match that pick.',
+    }
   }
 
-  if (scorelineError != null && scorelineError <= 1) {
-    return pickInsightTemplate(templateSeed, [
-      `Strong read. You correctly backed ${winningSide || actualWinner} and came within a single goal of the final scoreline.`,
-      `You were very close to the final result. ${winningSide || actualWinner}'s extra detail was the only thing separating your prediction from ${actual}.`,
-      `You correctly backed ${winningSide || actualWinner} and nearly matched the ${actual} scoreline.`,
-    ])
+  if (score.scorelineError != null && score.scorelineError <= 1) {
+    return {
+      status: 'Very Close',
+      text: `Very close. ${predictedWinner || 'The draw'} landed as predicted and you missed the exact score by just one goal.`,
+    }
   }
 
-  if (score.scorelineComponents?.btts > 0 && score.scorelineComponents?.marginBand > 0) {
-    return pickInsightTemplate(templateSeed, [
-      `You correctly backed ${winningSide || actualWinner} and captured the rhythm of the match.`,
-      `Good result pick. Your scoreline also reflected how open the match became.`,
-      `You saw the right winner and the general shape of the final ${actual} result.`,
-    ])
+  const actualAbsMargin = Math.abs(actualMargin)
+  const predictedAbsMargin = Math.abs(predictedMargin)
+
+  if (actualAbsMargin > predictedAbsMargin && actualWinner) {
+    return {
+      status: 'Good Prediction',
+      text: `You got the winner right, but ${actualWinner} won by a much bigger margin.`,
+    }
   }
 
-  if (predictedCleanSheet && actualCleanSheet && winningSide) {
-    return pickInsightTemplate(templateSeed, [
-      `You correctly backed ${winningSide} and predicted a clean sheet.`,
-      `${winningSide} won as expected, and you were right that one side would be shut out.`,
-      `Good read. You had ${winningSide} winning and saw the clean-sheet pattern coming.`,
-    ])
+  if (actualAbsMargin < predictedAbsMargin) {
+    return {
+      status: 'Good Prediction',
+      text: 'You got the winner right, but the match was closer than your scoreline suggested.',
+    }
   }
 
-  return pickInsightTemplate(templateSeed, [
-    `You correctly backed ${winningSide || actualWinner}, but the final ${actual} scoreline landed away from your ${predicted} prediction.`,
-    `${winningSide || actualWinner} got the result you expected, though the match played out differently on the scoreboard.`,
-    `Good result pick. The scoreline, though, had a different shape from your ${predicted} call.`,
-  ])
-}
-
-function pickInsightTemplate(seed, templates) {
-  const index = Math.abs(hashString(seed)) % templates.length
-  return templates[index]
-}
-
-function hashString(value) {
-  return Array.from(String(value)).reduce((hash, char) => {
-    return ((hash << 5) - hash + char.charCodeAt(0)) | 0
-  }, 0)
+  return {
+    status: 'Good Prediction',
+    text: `Good prediction. You correctly picked ${predictedWinner || 'the draw'}.`,
+  }
 }
 
 function rankTitleFor({ accuracy, exactScores, finishedPicks }) {

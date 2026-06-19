@@ -3139,6 +3139,18 @@ select:disabled {
   color: var(--gold-dark);
 }
 
+.match-analysis-card strong {
+  width: fit-content;
+  padding: 4px 8px;
+  border-radius: 999px;
+  color: var(--navy);
+  background: #fff8e8;
+  border: 1px solid rgba(200, 164, 93, 0.28);
+  font-size: 0.76rem;
+  font-weight: 950;
+  line-height: 1;
+}
+
 .match-analysis-card p {
   margin: 0;
   color: #24364b;
