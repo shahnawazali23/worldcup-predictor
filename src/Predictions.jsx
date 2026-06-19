@@ -519,7 +519,9 @@ function PotentialPointsPanel({ potential, prediction }) {
       </summary>
       <div className="potential-breakdown">
         <BreakdownLine label="Winner Prediction" value={`+${potential.main}`} active={potential.hasMainPick} />
-        <BreakdownLine label="Scoreline Insight" value={`+${potential.scoreline}`} active={potential.hasScoreline} />
+        <BreakdownLine label="Exact Score" value={`+${potential.exact}`} active={potential.hasScoreline} />
+        <BreakdownLine label="BTTS" value={`+${potential.btts}`} active={potential.hasScoreline} />
+        <BreakdownLine label="Margin Band" value={`+${potential.marginBand}`} active={potential.hasScoreline} />
         {prediction?.joker_used && (
           <BreakdownLine icon="flame" label="Joker Active" value="x2" active joker />
         )}

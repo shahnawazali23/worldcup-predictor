@@ -157,7 +157,7 @@ function buildLeaderboardView(data, currentUserId) {
     })
     if (score.correctPick) analytics.correctPicks += 1
     if (!score.correctPick) analytics.wrongPicks += 1
-    if (score.scorelineError === 0) analytics.exactScores += 1
+    if (score.scorelineComponents.exact > 0) analytics.exactScores += 1
   })
 
   const rows = baseRows.map((row) => {

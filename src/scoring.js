@@ -58,22 +58,8 @@ function sameTeamIdentity(left, right) {
   return canonicalTeamName(left.name) === canonicalTeamName(right.name)
 }
 
-export function scorelineBonus(fixture, prediction) {
-  const pred1 = prediction.pred_goals_team1
-  const pred2 = prediction.pred_goals_team2
-  const actual1 = fixture.goals_team1
-  const actual2 = fixture.goals_team2
-
-  if (pred1 == null || pred2 == null) return 0
-  if (actual1 == null || actual2 == null) return 0
-
-  const scorelineError = Math.abs(pred1 - actual1) + Math.abs(pred2 - actual2)
-  if (scorelineError === 0) return 3
-  if (scorelineError === 1) return 2
-  if (scorelineError === 2) return 1
-  if (scorelineError === 3) return 0
-  if (scorelineError === 4) return -1
-  return -2
+export function scorelineBonus(fixture, prediction, resultCorrect = false, teamsById = {}) {
+  return scorelineComponentScore(fixture, prediction, resultCorrect, teamsById).total
 }
 
 export function scorelineErrorFor(fixture, prediction) {
@@ -86,6 +72,95 @@ export function scorelineErrorFor(fixture, prediction) {
   if (actual1 == null || actual2 == null) return null
 
   return Math.abs(pred1 - actual1) + Math.abs(pred2 - actual2)
+}
+
+export function scorelineComponentScore(fixture, prediction, resultCorrect, teamsById = {}) {
+  const pred1 = prediction.pred_goals_team1
+  const pred2 = prediction.pred_goals_team2
+  const actual1 = fixture.goals_team1
+  const actual2 = fixture.goals_team2
+
+  if (pred1 == null || pred2 == null || actual1 == null || actual2 == null) {
+    return emptyScorelineComponents()
+  }
+
+  const aligned = scorelineAlignsWithPick(fixture, prediction, teamsById)
+  const predictedBtts = pred1 > 0 && pred2 > 0
+  const actualBtts = actual1 > 0 && actual2 > 0
+  const predictedBand = marginBand(pred1, pred2)
+  const actualBand = marginBand(actual1, actual2)
+  const bandDistance = Math.abs(marginBandIndex(predictedBand) - marginBandIndex(actualBand))
+
+  if (!resultCorrect) {
+    const btts = predictedBtts === actualBtts ? 0 : -1
+    const marginBandPoints = bandDistance >= 2 ? -1 : 0
+
+    return {
+      aligned,
+      btts,
+      exact: 0,
+      marginBand: marginBandPoints,
+      marginBandDistance: bandDistance,
+      total: Math.max(-2, btts + marginBandPoints),
+    }
+  }
+
+  if (!aligned) return { ...emptyScorelineComponents(), aligned }
+
+  const exact = pred1 === actual1 && pred2 === actual2 ? 2 : 0
+  const btts = predictedBtts === actualBtts ? 1 : 0
+  const marginBandPoints = bandDistance === 0 ? 1 : bandDistance === 1 ? 0 : -1
+
+  return {
+    aligned,
+    btts,
+    exact,
+    marginBand: marginBandPoints,
+    marginBandDistance: bandDistance,
+    total: exact + btts + marginBandPoints,
+  }
+}
+
+function emptyScorelineComponents() {
+  return {
+    aligned: false,
+    btts: 0,
+    exact: 0,
+    marginBand: 0,
+    marginBandDistance: null,
+    total: 0,
+  }
+}
+
+function scorelineAlignsWithPick(fixture, prediction, teamsById) {
+  const pred1 = prediction.pred_goals_team1
+  const pred2 = prediction.pred_goals_team2
+  const pickedId = prediction.pick_is_draw ? 'draw' : prediction.picked_team_id
+
+  if (pred1 == null || pred2 == null || !pickedId) return false
+  if (pred1 === pred2) return pickedId === 'draw'
+
+  const predictedWinnerId = pred1 > pred2 ? fixture.team1_id : fixture.team2_id
+  if (String(predictedWinnerId) === String(pickedId)) return true
+
+  return sameTeamIdentity(teamsById[predictedWinnerId], teamsById[pickedId])
+}
+
+export function marginBand(homeGoals, awayGoals) {
+  const margin = Math.abs(homeGoals - awayGoals)
+  if (margin === 0) return 'draw'
+  if (margin === 1) return 'narrow'
+  if (margin === 2) return 'comfortable'
+  return 'dominant'
+}
+
+function marginBandIndex(band) {
+  return {
+    draw: 0,
+    narrow: 1,
+    comfortable: 2,
+    dominant: 3,
+  }[band] ?? 0
 }
 
 export function expectedScoreForFixture(fixture, teamsById, fixtures = []) {
@@ -236,7 +311,8 @@ export function scoreMatch(fixture, prediction, teamsById) {
 
   const baseMain = mainPickBasePoints(fixture, prediction, teamsById)
   const main = baseMain
-  const scoreline = scorelineBonus(fixture, prediction)
+  const components = scorelineComponentScore(fixture, prediction, main > 0, teamsById)
+  const scoreline = components.total
   const scorelineError = scorelineErrorFor(fixture, prediction)
   const beforeJoker = main + scoreline
   const total = prediction.joker_used ? beforeJoker * 2 : beforeJoker
@@ -246,6 +322,7 @@ export function scoreMatch(fixture, prediction, teamsById) {
     main,
     baseMain,
     exactScore: scoreline,
+    scorelineComponents: components,
     insight: scoreline,
     insightDetails: {
       ...emptyInsight(),
@@ -264,6 +341,7 @@ export function emptyMatchScore() {
     main: 0,
     baseMain: 0,
     exactScore: 0,
+    scorelineComponents: emptyScorelineComponents(),
     insight: 0,
     insightDetails: {
       ...emptyInsight(),

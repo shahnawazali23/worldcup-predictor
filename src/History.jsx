@@ -64,13 +64,12 @@ function History({ data, session }) {
             : data.teamsById[prediction.picked_team_id]
           const predictedScore = formatPredictedScore(prediction)
           const resultStatus = getResultStatus(fixture, prediction, score)
-          const scorelinePoints = score?.scoreline || 0
-          const basePoints = score ? score.main + scorelinePoints : null
+          const components = score?.scorelineComponents
+          const basePoints = score ? score.main + score.scoreline : null
           const jokerBonus = score && prediction.joker_used ? score.total - basePoints : null
           const insightExplanation = score
             ? insightExplanationFor({ fixture, prediction, score, team1, team2 })
             : ''
-          const rating = score ? insightRatingFor(score.scoreline) : null
 
           return (
             <article className="history-row" key={fixture.id}>
@@ -103,11 +102,12 @@ function History({ data, session }) {
                 <div className="history-breakdown">
                   <p className="section-label">Points Breakdown</p>
                   <BreakdownItem label="Winner Prediction" value={score ? score.main : null} />
+                  <BreakdownItem label="Exact Score" value={components?.exact ?? null} />
+                  <BreakdownItem label="BTTS" value={components?.btts ?? null} />
                   <BreakdownItem
-                    label="Insight Rating"
-                    meta={rating?.label}
-                    tone={rating?.tone}
-                    value={score ? scorelinePoints : null}
+                    label="Margin Band"
+                    meta={components ? marginBandLabel(components.marginBandDistance) : null}
+                    value={components?.marginBand ?? null}
                   />
                   {prediction.joker_used && <BreakdownItem label="Joker Bonus" value={jokerBonus} joker />}
                   <div className="history-total">
@@ -203,7 +203,7 @@ function buildHistorySummary(rows) {
     currentStreak,
     rankTitle: rankTitleFor({
       accuracy,
-      exactScores: completedResultRows.filter((row) => row.score.scorelineError === 0).length,
+      exactScores: completedResultRows.filter((row) => row.score.scorelineComponents.exact > 0).length,
       finishedPicks: completedResultRows.length,
     }),
     totalPoints,
@@ -264,13 +264,11 @@ function formatPoints(points) {
   return `${points >= 0 ? '+' : ''}${points} pts`
 }
 
-function insightRatingFor(points) {
-  if (points >= 3) return { icon: 'target', label: 'Excellent Read', tone: 'excellent' }
-  if (points === 2) return { icon: 'trendingUp', label: 'Strong Read', tone: 'strong' }
-  if (points === 1) return { icon: 'checkCircle', label: 'Solid Read', tone: 'solid' }
-  if (points === 0) return { icon: 'activity', label: 'Neutral Read', tone: 'neutral' }
-  if (points === -1) return { icon: 'clock', label: 'Missed Read', tone: 'missed' }
-  return { icon: 'lock', label: 'Poor Read', tone: 'poor' }
+function marginBandLabel(distance) {
+  if (distance == null) return null
+  if (distance === 0) return 'Same band'
+  if (distance === 1) return 'One band away'
+  return 'Two or more bands away'
 }
 
 function insightExplanationFor({ fixture, prediction, score, team1, team2 }) {
@@ -281,15 +279,28 @@ function insightExplanationFor({ fixture, prediction, score, team1, team2 }) {
   const predicted = `${prediction.pred_goals_team1}-${prediction.pred_goals_team2}`
   const actual = `${fixture.goals_team1}-${fixture.goals_team2}`
   const actualMargin = fixture.goals_team1 - fixture.goals_team2
-  const predictedMargin = prediction.pred_goals_team1 - prediction.pred_goals_team2
   const actualWinner = actualMargin > 0 ? homeName : actualMargin < 0 ? awayName : 'the draw'
-  const predictedWinner = predictedMargin > 0 ? homeName : predictedMargin < 0 ? awayName : 'the draw'
   const winningSide = actualWinner === 'the draw' ? null : actualWinner
-  const predictedWinnerCorrect = predictedWinner === actualWinner
-  const scorelineError = score.scorelineError
-  const templateSeed = `${fixture.id}-${prediction.user_id}-${predicted}-${actual}-${scorelineError}`
+  const components = score.scorelineComponents
+  const templateSeed = `${fixture.id}-${prediction.user_id}-${predicted}-${actual}-${score.scoreline}-${score.main}`
 
-  if (scorelineError === 0) {
+  if (!score.correctPick) {
+    return pickInsightTemplate(templateSeed, [
+      `The ${actual} result moved away from your ${predicted} prediction, so only scoreline penalties could apply.`,
+      `${homeName} vs ${awayName} did not follow your result pick, which kept scoreline rewards off the table.`,
+      `Your scoreline read could not earn bonus points because the main result prediction missed.`,
+    ])
+  }
+
+  if (!components.aligned) {
+    return pickInsightTemplate(templateSeed, [
+      `You picked the right result, but your scoreline did not align with that selection.`,
+      `The winner was right, but the scoreline pointed to a different match outcome.`,
+      `Your result pick landed, while the scoreline itself told a different story.`,
+    ])
+  }
+
+  if (components.exact > 0) {
     return pickInsightTemplate(templateSeed, [
       `You called ${homeName} vs ${awayName} exactly as it unfolded, including the ${actual} scoreline.`,
       `Your ${predicted} prediction nailed the final score.`,
@@ -297,66 +308,34 @@ function insightExplanationFor({ fixture, prediction, score, team1, team2 }) {
     ])
   }
 
-  if (scorelineError === 1) {
-    if (predictedWinnerCorrect && winningSide) {
-      return pickInsightTemplate(templateSeed, [
-        `You correctly backed ${winningSide} and came within a single goal of the final ${actual} scoreline.`,
-        `You were right about ${winningSide} winning and almost landed the exact score.`,
-        `Your prediction tracked the match closely, with only one goal separating it from the final result.`,
-      ])
-    }
-
+  if (components.btts > 0 && components.marginBand > 0) {
     return pickInsightTemplate(templateSeed, [
-      `You came within a single goal of the final ${actual} scoreline.`,
-      `Your scoreline was close, with one goal separating your prediction from the result.`,
-      `You nearly matched the final score, even though the result moved slightly away from your call.`,
+      `You correctly backed ${winningSide || actualWinner} and read both the scoring pattern and margin band.`,
+      `Your prediction captured the winner, both teams scoring, and the shape of the final margin.`,
+      `The result matched your broader read: winner, BTTS, and margin band all landed.`,
     ])
   }
 
-  if (scorelineError === 2) {
-    if (predictedWinnerCorrect && winningSide) {
-      return pickInsightTemplate(templateSeed, [
-        `You correctly backed ${winningSide}, even though the final margin landed differently.`,
-        `You had the right winner, but the ${actual} scoreline added a little more distance from your prediction.`,
-        `Your prediction caught the result direction, with the final score finishing two goals away.`,
-      ])
-    }
-
+  if (components.btts > 0) {
     return pickInsightTemplate(templateSeed, [
-      `Your scoreline kept close enough to the final ${actual} result to earn a small return.`,
-      `You were two goals away from the final scoreline.`,
-      `${homeName} and ${awayName} finished within reach of your predicted scoreline.`,
+      `You correctly backed ${winningSide || actualWinner} and read the both-teams-to-score pattern.`,
+      `The winner was right, and your scoreline correctly anticipated whether both sides would score.`,
+      `Your result pick landed, with the BTTS call adding value to the prediction.`,
     ])
   }
 
-  if (scorelineError === 3) {
-    if (predictedWinnerCorrect && winningSide) {
-      return pickInsightTemplate(templateSeed, [
-        `You correctly picked ${winningSide}, but the scoreline finished too far from your prediction for a bonus.`,
-        `The winner was right, but the final ${actual} result moved beyond your scoreline call.`,
-        `You had the result direction, but the match total stretched away from your prediction.`,
-      ])
-    }
-
+  if (components.marginBand > 0) {
     return pickInsightTemplate(templateSeed, [
-      `The final ${actual} scoreline finished too far from your prediction for a scoreline return.`,
-      `${homeName} vs ${awayName} moved away from your ${predicted} scoreline as the result settled.`,
-      `Your scoreline missed by three goals, so the scoreline insight stayed level.`,
-    ])
-  }
-
-  if (predictedWinner !== actualWinner) {
-    return pickInsightTemplate(templateSeed, [
-      `${actualWinner === 'the draw' ? 'The match stayed level' : `${actualWinner} controlled the result`} far more than your ${predicted} prediction anticipated.`,
-      `${actualWinner === 'the draw' ? 'The draw became the story' : `${actualWinner} shaped the match`} while your prediction expected a different outcome.`,
-      `${homeName} vs ${awayName} moved well away from your predicted scoreline as the final ${actual} result took hold.`,
+      `You correctly backed ${winningSide || actualWinner} and matched the final margin band.`,
+      `The winner and margin shape matched your prediction, even without the exact scoreline.`,
+      `Your result pick landed, and the margin band read was on target.`,
     ])
   }
 
   return pickInsightTemplate(templateSeed, [
-    `You had the winner, but the final ${actual} scoreline moved too far away from your prediction.`,
-    `The result became more extreme than your ${predicted} scoreline allowed for.`,
-    `${winningSide || 'The winning side'} pushed the scoreline beyond your prediction.`,
+    `You picked the right result, but the final ${actual} scoreline landed away from your detailed read.`,
+    `The winner was right, though the scoring pattern did not quite follow your prediction.`,
+    `Your result pick held up, but the scoreline components did not add extra points.`,
   ])
 }
 

@@ -7,12 +7,18 @@ export function predictionPotential({ fixture, prediction, teamsById }) {
   const pickedId = prediction?.pick_is_draw ? 'draw' : prediction?.picked_team_id
   const main = possibleMainPickPoints(fixture, pickedId || 'potential', teamsById)
   const hasScoreline = prediction?.pred_goals_team1 != null && prediction?.pred_goals_team2 != null
-  const scoreline = 3
+  const exact = 2
+  const btts = 1
+  const marginBand = 1
+  const scoreline = exact + btts + marginBand
   const beforeJoker = main + scoreline
   const multiplier = prediction?.joker_used ? 2 : 1
 
   return {
+    btts,
+    exact,
     insight: scoreline,
+    marginBand,
     maximum: beforeJoker * multiplier,
     main,
     scoreline,
