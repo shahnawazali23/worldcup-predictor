@@ -64,8 +64,8 @@ function History({ data, session }) {
             : data.teamsById[prediction.picked_team_id]
           const predictedScore = formatPredictedScore(prediction)
           const resultStatus = getResultStatus(fixture, prediction, score)
-          const components = score?.scorelineComponents
-          const basePoints = score ? score.main + score.scoreline : null
+          const scorelinePoints = score?.scoreline || 0
+          const basePoints = score ? score.main + scorelinePoints : null
           const jokerBonus = score && prediction.joker_used ? score.total - basePoints : null
           const insightExplanation = score
             ? insightExplanationFor({ fixture, prediction, score, team1, team2 })
@@ -101,14 +101,8 @@ function History({ data, session }) {
               <div className="history-detail">
                 <div className="history-breakdown">
                   <p className="section-label">Points Breakdown</p>
-                  <BreakdownItem label="Winner Prediction" value={score ? score.main : null} />
-                  <BreakdownItem label="Exact Score" value={components?.exact ?? null} />
-                  <BreakdownItem label="BTTS" value={components?.btts ?? null} />
-                  <BreakdownItem
-                    label="Margin Band"
-                    meta={components ? marginBandLabel(components.marginBandDistance) : null}
-                    value={components?.marginBand ?? null}
-                  />
+                  <BreakdownItem label="Result Prediction" value={score ? score.main : null} />
+                  <BreakdownItem label="Scoreline Accuracy" value={score ? scorelinePoints : null} />
                   {prediction.joker_used && <BreakdownItem label="Joker Bonus" value={jokerBonus} joker />}
                   <div className="history-total">
                     <span>Total Points Earned</span>
@@ -254,21 +248,18 @@ function formatPredictionLine({ fixture, prediction, pickedTeamRecord, team1, te
   const homeName = team1?.name || fixture.home_team || 'Home'
   const awayName = team2?.name || fixture.away_team || 'Away'
 
-  if (prediction.pick_is_draw) return `${homeName} ${scoreText} ${awayName}`
-  if (pickedTeamRecord?.name) return `${pickedTeamRecord.name} ${scoreText}`
+  if (prediction.pred_goals_team1 != null && prediction.pred_goals_team2 != null) {
+    return `${homeName} ${scoreText} ${awayName}`
+  }
+
+  if (prediction.pick_is_draw) return `${homeName} draw ${awayName}`
+  if (pickedTeamRecord?.name) return `${pickedTeamRecord.name} to win`
   return `No pick ${scoreText}`
 }
 
 function formatPoints(points) {
   if (typeof points !== 'number') return points
   return `${points >= 0 ? '+' : ''}${points} pts`
-}
-
-function marginBandLabel(distance) {
-  if (distance == null) return null
-  if (distance === 0) return 'Same band'
-  if (distance === 1) return 'One band away'
-  return 'Two or more bands away'
 }
 
 function insightExplanationFor({ fixture, prediction, score, team1, team2 }) {
@@ -281,61 +272,72 @@ function insightExplanationFor({ fixture, prediction, score, team1, team2 }) {
   const actualMargin = fixture.goals_team1 - fixture.goals_team2
   const actualWinner = actualMargin > 0 ? homeName : actualMargin < 0 ? awayName : 'the draw'
   const winningSide = actualWinner === 'the draw' ? null : actualWinner
-  const components = score.scorelineComponents
-  const templateSeed = `${fixture.id}-${prediction.user_id}-${predicted}-${actual}-${score.scoreline}-${score.main}`
+  const losingSide = actualMargin > 0 ? awayName : actualMargin < 0 ? homeName : null
+  const predictedCleanSheet = prediction.pred_goals_team1 === 0 || prediction.pred_goals_team2 === 0
+  const actualCleanSheet = fixture.goals_team1 === 0 || fixture.goals_team2 === 0
+  const scorelineError = score.scorelineError
+  const templateSeed = `${fixture.id}-${prediction.user_id}-${predicted}-${actual}-${score.total}`
+
+  if (score.scorelineComponents?.exact > 0) {
+    return pickInsightTemplate(templateSeed, [
+      `Perfect call. You predicted ${homeName} ${actual} ${awayName} exactly.`,
+      `You read this one perfectly, calling the ${actual} scoreline before kickoff.`,
+      `Spot on. Your prediction matched the final result exactly.`,
+    ])
+  }
 
   if (!score.correctPick) {
+    if (actualWinner === 'the draw') {
+      return pickInsightTemplate(templateSeed, [
+        `The match never developed as expected. ${homeName} and ${awayName} cancelled each other out in a ${actual} draw.`,
+        `Neither side found enough separation, turning your ${predicted} call into a ${actual} draw.`,
+        `This finished level, not the result your ${predicted} prediction anticipated.`,
+      ])
+    }
+
     return pickInsightTemplate(templateSeed, [
-      `The ${actual} result moved away from your ${predicted} prediction, so only scoreline penalties could apply.`,
-      `${homeName} vs ${awayName} did not follow your result pick, which kept scoreline rewards off the table.`,
-      `Your scoreline read could not earn bonus points because the main result prediction missed.`,
+      `${winningSide} took control of the match far more decisively than your ${predicted} prediction anticipated.`,
+      `${winningSide} found the result your prediction did not see, finishing ${actual} against ${losingSide}.`,
+      `The match moved away from your ${predicted} call, with ${winningSide} coming out on top ${actual}.`,
     ])
   }
 
-  if (!components.aligned) {
+  if (!score.scorelineComponents?.aligned) {
     return pickInsightTemplate(templateSeed, [
-      `You picked the right result, but your scoreline did not align with that selection.`,
-      `The winner was right, but the scoreline pointed to a different match outcome.`,
-      `Your result pick landed, while the scoreline itself told a different story.`,
+      `You picked the right result, but your ${predicted} scoreline told a different story.`,
+      `The result pick was right, although the scoreline did not match the outcome you selected.`,
+      `You got the winner, but the score prediction pulled away from that call.`,
     ])
   }
 
-  if (components.exact > 0) {
+  if (scorelineError != null && scorelineError <= 1) {
     return pickInsightTemplate(templateSeed, [
-      `You called ${homeName} vs ${awayName} exactly as it unfolded, including the ${actual} scoreline.`,
-      `Your ${predicted} prediction nailed the final score.`,
-      `You read the full match perfectly, right down to the ${actual} result.`,
+      `Strong read. You correctly backed ${winningSide || actualWinner} and came within a single goal of the final scoreline.`,
+      `You were very close to the final result. ${winningSide || actualWinner}'s extra detail was the only thing separating your prediction from ${actual}.`,
+      `You correctly backed ${winningSide || actualWinner} and nearly matched the ${actual} scoreline.`,
     ])
   }
 
-  if (components.btts > 0 && components.marginBand > 0) {
+  if (score.scorelineComponents?.btts > 0 && score.scorelineComponents?.marginBand > 0) {
     return pickInsightTemplate(templateSeed, [
-      `You correctly backed ${winningSide || actualWinner} and read both the scoring pattern and margin band.`,
-      `Your prediction captured the winner, both teams scoring, and the shape of the final margin.`,
-      `The result matched your broader read: winner, BTTS, and margin band all landed.`,
+      `You correctly backed ${winningSide || actualWinner} and captured the rhythm of the match.`,
+      `Good result pick. Your scoreline also reflected how open the match became.`,
+      `You saw the right winner and the general shape of the final ${actual} result.`,
     ])
   }
 
-  if (components.btts > 0) {
+  if (predictedCleanSheet && actualCleanSheet && winningSide) {
     return pickInsightTemplate(templateSeed, [
-      `You correctly backed ${winningSide || actualWinner} and read the both-teams-to-score pattern.`,
-      `The winner was right, and your scoreline correctly anticipated whether both sides would score.`,
-      `Your result pick landed, with the BTTS call adding value to the prediction.`,
-    ])
-  }
-
-  if (components.marginBand > 0) {
-    return pickInsightTemplate(templateSeed, [
-      `You correctly backed ${winningSide || actualWinner} and matched the final margin band.`,
-      `The winner and margin shape matched your prediction, even without the exact scoreline.`,
-      `Your result pick landed, and the margin band read was on target.`,
+      `You correctly backed ${winningSide} and predicted a clean sheet.`,
+      `${winningSide} won as expected, and you were right that one side would be shut out.`,
+      `Good read. You had ${winningSide} winning and saw the clean-sheet pattern coming.`,
     ])
   }
 
   return pickInsightTemplate(templateSeed, [
-    `You picked the right result, but the final ${actual} scoreline landed away from your detailed read.`,
-    `The winner was right, though the scoring pattern did not quite follow your prediction.`,
-    `Your result pick held up, but the scoreline components did not add extra points.`,
+    `You correctly backed ${winningSide || actualWinner}, but the final ${actual} scoreline landed away from your ${predicted} prediction.`,
+    `${winningSide || actualWinner} got the result you expected, though the match played out differently on the scoreboard.`,
+    `Good result pick. The scoreline, though, had a different shape from your ${predicted} call.`,
   ])
 }
 

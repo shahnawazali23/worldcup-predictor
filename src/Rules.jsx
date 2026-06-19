@@ -13,10 +13,9 @@ export default function Rules() {
         Correct winner predictions are worth +3. Wrong winner predictions are 0. Knockouts use
         the team that advances.
       </Rule>
-      <Rule title="Scoreline Components">
-        Scoreline rewards require the correct match result and an aligned scoreline. Exact score is
-        +2, BTTS is +1, and the correct margin band is +1. Wrong-result scorelines can only receive
-        BTTS or margin penalties.
+      <Rule title="Scoreline Accuracy">
+        Scoreline rewards require the correct match result and a scoreline that matches your pick.
+        The closer your scoreline is to the final result, the more it can add.
       </Rule>
       <Rule title="Jokers">
         Three per player for the tournament. One per match. They double the complete match score,
